@@ -1,29 +1,29 @@
 // SPDX-License-Identifier: CERN-OHL-P-2.0
-// AXI4 / AXI4-Lite の構造体（コア最上位の 3 ポート（D-34）と SoC で使う）
-// コアのパッケージには依存しない
-// フィールドの順序は pulp-platform/axi の typedef.svh に倣ったが、互換性は要件にしない（D-36）
-// ACE（段階 2）で AW/AR にフィールドを足し、AC/CR/CD チャネルと RACK/WACK を追加する
+// AXI4 / AXI4-Lite structs for the three core ports (D-34) and the SoC.
+// Independent of the core packages.
+// Field order follows pulp-platform/axi typedef.svh, but compatibility is not a requirement (D-36).
+// ACE (stage 2) will add AW/AR fields, the AC/CR/CD channels and RACK/WACK.
 package overisc_axi_pkg;
 
-  // ---- 幅 ----
-  localparam int AXI_ADDR_W = 56;  // コアの物理アドレス幅（overisc_cfg_pkg::PADDR_W）以上にする
+  // ---- Widths ----
+  localparam int AXI_ADDR_W = 56;  // must be >= overisc_cfg_pkg::PADDR_W
   localparam int AXI_DATA_W = 128;  // D-17
   localparam int AXI_STRB_W = AXI_DATA_W / 8;
   localparam int AXI_ID_W = 4;
-  localparam int AXI_USER_W  = 1;    // pulp-platform/axi に合わせて 1 以上（未使用は 0 固定）
+  localparam int AXI_USER_W = 1;  // >= 1 as in pulp-platform/axi (tie unused bits to 0)
 
   localparam int AXIL_ADDR_W = 56;
-  localparam int AXIL_DATA_W = 64;  // コアからの MMIO アクセスは最大 8B
+  localparam int AXIL_DATA_W = 64;  // MMIO accesses from the core are at most 8B
   localparam int AXIL_STRB_W = AXIL_DATA_W / 8;
 
-  // ---- フィールドの型（AXI 仕様の固定幅） ----
+  // ---- Field types (fixed widths from the AXI spec) ----
   typedef logic [7:0] axi_len_t;
   typedef logic [2:0] axi_size_t;
   typedef logic [3:0] axi_cache_t;
   typedef logic [2:0] axi_prot_t;
   typedef logic [3:0] axi_qos_t;
   typedef logic [3:0] axi_region_t;
-  typedef logic [5:0] axi_atop_t;  // AXI5 のアトミック。使わない（0 固定）
+  typedef logic [5:0] axi_atop_t;  // AXI5 atomics; unused (tie to 0)
 
   typedef enum logic [1:0] {
     AXI_BURST_FIXED = 2'b00,
@@ -48,7 +48,7 @@ package overisc_axi_pkg;
   typedef logic [AXIL_DATA_W-1:0] axil_data_t;
   typedef logic [AXIL_STRB_W-1:0] axil_strb_t;
 
-  // ---- AXI4（命令側、データ側のキャッシュ側） ----
+  // ---- AXI4 (I-side and D-side cacheable) ----
   typedef struct packed {
     axi_id_t     id;
     axi_addr_t   addr;
@@ -99,7 +99,7 @@ package overisc_axi_pkg;
     axi_user_t      user;
   } axi_r_chan_t;
 
-  // マスタ → スレーブ
+  // master -> slave
   typedef struct packed {
     axi_aw_chan_t aw;
     logic         aw_valid;
@@ -111,7 +111,7 @@ package overisc_axi_pkg;
     logic         r_ready;
   } axi_req_t;
 
-  // スレーブ → マスタ
+  // slave -> master
   typedef struct packed {
     logic        aw_ready;
     logic        ar_ready;
@@ -122,7 +122,7 @@ package overisc_axi_pkg;
     axi_r_chan_t r;
   } axi_resp_t;
 
-  // ---- AXI4-Lite（データ側の MMIO 側） ----
+  // ---- AXI4-Lite (D-side MMIO) ----
   typedef struct packed {
     axil_addr_t addr;
     axi_prot_t  prot;
@@ -141,7 +141,7 @@ package overisc_axi_pkg;
   } axil_ar_chan_t;
 
   typedef struct packed {
-    axil_data_t data;
+    axil_data_t     data;
     axi_resp_code_t resp;
   } axil_r_chan_t;
 

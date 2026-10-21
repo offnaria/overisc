@@ -75,6 +75,7 @@ make format        # SystemVerilog を Verible で整形（既定の設定）
 ## コーディング規約
 
 - SystemVerilog は Verible（`verible-verilog-format`、既定の設定）で整形してからコミットする（`make format`）
+- SystemVerilog のコメントは英語で書く（Verible は行長をバイト数で数えるため、日本語が混ざると行長の上限を超えたと判断されて整形されない）
 - `always_ff` / `always_comb` を使う。ラッチを作らない
 - パッケージ・モジュール名の接頭辞は `overisc_`。1 ファイル 1 モジュールで、ファイル名はモジュール名と同じ（Verilator の DECLFILENAME）
 - モジュールのポートは packed 構造体の req/resp で書く（Interface は使わない。D-36）
