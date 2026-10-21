@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
 # kernel.org crosstool の RISC-V GCC（libc なし）を取得して展開する（D-33）。
 # 使い方: get-toolchain.sh <インストール先>
 #   <インストール先>/gcc-<版>-nolibc/riscv64-linux/bin/riscv64-linux-gcc ができる。

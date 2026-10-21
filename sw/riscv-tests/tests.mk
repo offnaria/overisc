@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # riscv-tests の isa/Makefile と一緒に読み込み、必要なテストだけをビルドする。
 #   make -C <出力先> -f <riscv-tests>/isa/Makefile -f tests.mk src_dir=<riscv-tests>/isa <ターゲット>
 # ターゲット:

@@ -186,3 +186,14 @@
 - **理由**: riscv-tests（`-nostdlib` のアセンブリ）、OpenSBI、カーネルはいずれも libc 不要で、一つで足りる。tarball を展開するだけで最新 GCC が使え、CI でも同じ物を取得してキャッシュできる。Ubuntu 22.04 の apt 版（unknown-elf 10.2、linux-gnu 11.2）は古く、新しい binutils との組み合わせで `zicsr` まわりの問題が出やすい。ユーザーランドは lp64（ソフトウェア浮動小数点）の libc が必要で、配布物の lp64d ツールチェーンは使えないため、どの案でも Buildroot のツールチェーンになる
 - **代替案**: apt の `riscv64-unknown-elf-` / `riscv64-linux-gnu-`、riscv-collab のビルド済みツールチェーン、riscv-gnu-toolchain をソースからビルド、LLVM（カーネルと OpenSBI は対応するが riscv-tests の Makefile は GCC 前提）
 - **見直す条件**: libc が必要なベアメタルプログラム（CoreMark など）を作るとき（picolibc か riscv-collab の elf 版を追加）。LLVM はクロスチェック用に後で使ってもよい
+
+## D-34 コアの最上位は M0 から AXI 系の 3 ポート
+- **決定**: コアの最上位を、M0 から最終形と同じ 3 ポートにする。命令側 AXI4 128bit、データ側のキャッシュ側 AXI4 128bit、データ側の MMIO 側 AXI4-Lite 64bit。ACE の追加信号は段階 2 で足す。キャッシュはコアの中に置き、コア内部は REQ/RESP（D-15）のまま。M0〜M3 はキャッシュの位置に REQ/RESP → AXI の変換器を置き、M4 でキャッシュに差し替える。M0 では MMIO 側は使わず、`tohost` はキャッシュ側のメモリに置く
+- **理由**: M2 の SoC で CLINT/UART を AXI4-Lite につなぐので、コアの外側は M4 ではなく M2 で AXI になる。テストベンチのメモリモデルを途中で作り直さずに済む。AXI の規則違反をキャッシュと同時ではなく M0 から検出できる（D-03 と同じ切り分けの考え方）。OOC 合成の境界が最終形と同じになり、周波数の推移を比べやすい
+- **代償**: M0 で変換器の RTL が増える。キャッシュがない間はフェッチのたびに AXI を往復するので遅い（M3 まで性能は問わない）
+- **代替案**: M0〜M3 はコアの外側を REQ/RESP にし、M4 で AXI にする（当初案。design.md §5.1 の旧記述）
+
+## D-35 ライセンスはハードウェアが CERN-OHL-P-2.0、ソフトウェアが Apache-2.0
+- **決定**: rtl/、syn/、boards/、Top/、docs/ は CERN-OHL-P-2.0。sim/、sw/、Makefile などのビルドスクリプトは Apache-2.0。各ファイルの先頭に `SPDX-License-Identifier` を書き、本文は `LICENSES/` に置く。third_party/ のサブモジュールはそれぞれのライセンスのまま
+- **理由**: 趣味のプロジェクトで、成果を自由に使ってもらえる寛容なライセンスにしたい。CERN-OHL はハードウェア向けに作られており、ソフトウェアにはソフトウェア用のライセンスを使うことが推奨されている。Apache-2.0 は寛容で特許条項があり、CERN-OHL-P と考え方が近い。取り込む予定の部品（Spike と riscv-tests は BSD-3-Clause、pulp-platform/axi・riscv-dbg・CVFPU は Solderpad）とも衝突しない
+- **代替案**: 全体を CERN-OHL-P-2.0、ソフトウェアを MIT、強いコピーレフト（CERN-OHL-S）

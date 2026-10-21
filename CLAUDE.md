@@ -79,6 +79,7 @@ make lint          # コアの Verilator lint（-Wall、警告ゼロ）
 - ready/valid の規則: valid は ready に依存させない。一度立てた valid は受理されるまで下げず内容も変えない
 - valid の次状態は全段で同じ書き方にする: `valid_next = kill ? 0 : (stall ? valid : valid_in)`（**フラッシュはストールより優先**）
 - 幅や数はパラメータ化する（バス幅 `DATA_W`、Fetch Buffer の出口幅、レジスタファイルのポート数など）
+- 新しいファイルの先頭に `SPDX-License-Identifier` を書く。rtl/・syn/・boards/・Top/・docs/ は `CERN-OHL-P-2.0`、sim/・sw/・ビルドスクリプトは `Apache-2.0`（D-35）
 
 ## 壊してはいけない設計上の不変条件
 

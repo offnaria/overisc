@@ -1,0 +1,11 @@
+Overisc is licensed per directory. Each file carries an SPDX-License-Identifier.
+
+  Hardware (CERN-OHL-P-2.0, see LICENSES/CERN-OHL-P-2.0.txt):
+    rtl/, syn/, boards/, Top/, docs/
+
+  Software (Apache-2.0, see LICENSES/Apache-2.0.txt):
+    sim/, sw/, Makefile and other build scripts
+
+Copyright 2026 offNaria
+
+Files under third_party/ are git submodules and keep their own licenses.

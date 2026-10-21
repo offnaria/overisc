@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # Overisc のトップレベル Makefile
 #
 #   make toolchain    kernel.org crosstool の GCC を .tools/ に取得（D-33）
