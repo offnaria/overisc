@@ -48,12 +48,24 @@ syn/               OOC 合成スクリプト
 boards/<board>/    ボード用トップラッパー、制約、IP（FPGA 実装段階で追加）
 Top/<board>/       Hog のリストファイル（FPGA 実装段階で導入）
 docs/              設計書と判断記録
+third_party/       サブモジュール（riscv-tests, riscv-isa-sim = Spike）。D-32
+```
+
+## ビルド
+
+```
+git submodule update --init --recursive
+make toolchain     # kernel.org crosstool の GCC を .tools/ に取得（D-33）
+make spike         # Spike を build/spike/install にビルド
+make riscv-tests   # M0 用テストを build/riscv-tests にビルド（実行対象は m0.list）
+make lint          # コアの Verilator lint（-Wall、警告ゼロ）
 ```
 
 ## ファイルリストの規則
 
-- **正は Verilator の `.f`**。階層: `rtl/core/core.f` → `rtl/soc/soc.f`（`-f` で core を含む）→ `sim/sim.f`（tb, DPI, Verilator オプション）
+- **正は Verilator の `.f`**。階層: `rtl/core/core.f` → `rtl/soc/soc.f`（`-F` で core を含む）→ `sim/sim.f`（tb, DPI, Verilator オプション）
 - `core.f` と `soc.f` には **合成可能なソースと `+incdir+`、合成でも必要な define だけ** を書く
+- `.f` の中のパスはその `.f` ファイルからの相対パスで書き、入れ子は `-F` で読む
 - SystemVerilog のパッケージはファイルリストの先頭に置く
 - シミュレーション専用の記述は `` `ifdef VERILATOR `` で囲む
 - 将来 Hog のリストファイルは `core.f`/`soc.f` から生成する（`rtl/tech/generic` → `rtl/tech/xilinx` の置換だけが意図的な差分）
