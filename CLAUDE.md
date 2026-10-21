@@ -38,6 +38,7 @@
 ## リポジトリ構成（予定）
 
 ```
+rtl/common/        コアと SoC で共有する部品（AXI パッケージなど）
 rtl/core/          コア本体（ボード非依存）
 rtl/soc/           SoC（CLINT, UART, インターコネクト, SoC 情報レジスタ, 後に L2/PLIC）
 rtl/tech/generic/  テクノロジーラッパーの動作記述版（RAM など。シミュレーションと推論合成用）
@@ -59,12 +60,13 @@ make toolchain     # kernel.org crosstool の GCC を .tools/ に取得（D-33�
 make spike         # Spike を build/spike/install にビルド
 make riscv-tests   # M0 用テストを build/riscv-tests にビルド（実行対象は m0.list）
 make lint          # コアの Verilator lint（-Wall、警告ゼロ）
+make format        # SystemVerilog を Verible で整形（既定の設定）
 ```
 
 ## ファイルリストの規則
 
-- **正は Verilator の `.f`**。階層: `rtl/core/core.f` → `rtl/soc/soc.f`（`-F` で core を含む）→ `sim/sim.f`（tb, DPI, Verilator オプション）
-- `core.f` と `soc.f` には **合成可能なソースと `+incdir+`、合成でも必要な define だけ** を書く
+- **正は Verilator の `.f`**。階層: `rtl/common/common.f` → `rtl/core/core.f`（`-F` で common を含む）→ `rtl/soc/soc.f`（`-F` で core を含む）→ `sim/sim.f`（tb, DPI, Verilator オプション）
+- `common.f`、`core.f`、`soc.f` には **合成可能なソースと `+incdir+`、合成でも必要な define だけ** を書く
 - `.f` の中のパスはその `.f` ファイルからの相対パスで書き、入れ子は `-F` で読む
 - SystemVerilog のパッケージはファイルリストの先頭に置く
 - シミュレーション専用の記述は `` `ifdef VERILATOR `` で囲む
@@ -72,7 +74,10 @@ make lint          # コアの Verilator lint（-Wall、警告ゼロ）
 
 ## コーディング規約
 
+- SystemVerilog は Verible（`verible-verilog-format`、既定の設定）で整形してからコミットする（`make format`）
 - `always_ff` / `always_comb` を使う。ラッチを作らない
+- パッケージ・モジュール名の接頭辞は `overisc_`。1 ファイル 1 モジュールで、ファイル名はモジュール名と同じ（Verilator の DECLFILENAME）
+- モジュールのポートは packed 構造体の req/resp で書く（Interface は使わない。D-36）
 - Verilator の lint を警告ゼロに保つ
 - **コアの RTL から XPM や Xilinx プリミティブを直接インスタンス化しない**（`rtl/tech/` のラッパー経由）
 - **リセットは valid ビットと制御状態だけ**。データパスはリセットしない

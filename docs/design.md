@@ -176,12 +176,15 @@ F0 → F1 → F2 ═[Fetch Buffer]═→ D → X → M → W
 ready/valid（AXI と同じ規則: valid は ready に依存しない、受理まで保持）
 
 ```
-REQ  (L1/LSU → 下流): op, paddr, size/mask, wdata, id, src(I/D/PTW), attr(cacheable/mmio)
-RESP (下流 → L1/LSU): rdata, id, beat, last, err(af/hwe)
+REQ  (fetch/LSU -> cache slot): op, paddr, size, wstrb, wdata, id, src(I/D/PTW)
+RESP (cache slot -> fetch/LSU): rdata, id, err(af/hwe)
 ```
-- `op`: ライン読み出し、部分書き込み、cbo 系（AMO は L1 内で処理するので含めない。M0〜M3 のキャッシュなし構成では LSU が read-modify-write）
-- `beat`: WRAP バーストで順不同に返るビートの位置
+- フェッチ/LSU とキャッシュの位置（M0〜M3 は AXI への変換器）の間の形式。データは 64bit（D-36）
+- 命令側 1 本、データ側はキャッシュ側と MMIO 側の 2 本
+- `op`: 読み出し、部分書き込み、後で cbo 系（AMO は L1 内で処理するので含めない。M0〜M3 のキャッシュなし構成では LSU が read-modify-write）
 - `id`: 将来のノンブロッキングキャッシュ用に最初から持つ
+- ライン単位の転送（WRAP バースト、critical-word-first）はキャッシュと AXI の間で扱う
+- モジュールのポートは packed 構造体の req/resp（Interface は使わない。D-36）
 - コアの最上位は M0 から AXI 系の 3 ポート（§5.2）。M0〜M3 はキャッシュの位置に REQ/RESP → AXI の変換器を置き、M4 でキャッシュに差し替える（D-34）
 - タイミングが厳しい所にはスキッドバッファ
 

@@ -32,8 +32,8 @@ M0 の完了条件（`CLAUDE.md`）を満たすまでの作業一覧。
 |---|---|---|---|
 | A1 | ✅ ディレクトリ構成、`core.f` / `soc.f` / `sim.f` の雛形、Verilator lint を回す Makefile ターゲット | C | — |
 | A2 | SV パッケージ: 定数・命令/パイプライン構造体（`is_rvc` を含む）、リダイレクトバス | U | — |
-| A3 | SV パッケージ: コア内部の REQ/RESP 構造体（op, paddr, size/mask, wdata, id, src, attr / rdata, id, beat, last, err）と、コア最上位の AXI4 / AXI4-Lite のチャネル構造体（D-34） | U | — |
-| A4 | SV パッケージ: 確定命令の記録の構造体（design.md §9.1） | U/C | — |
+| A3 | ✅ SV パッケージ: コア内部の REQ/RESP 構造体（op, paddr, size/mask, wdata, id, src, attr / rdata, id, beat, last, err）と、コア最上位の AXI4 / AXI4-Lite のチャネル構造体（D-34） | U | — |
+| A4 | ✅ SV パッケージ: 確定命令の記録の構造体（design.md §9.1） | U/C | — |
 
 A3（AXI 側）と A4 はテストベンチ（B）の入口なので、先に構造体だけ決めてもらえると並行しやすい。
 
@@ -64,7 +64,7 @@ A3（AXI 側）と A4 はテストベンチ（B）の入口なので、先に構
 | C7 | M: LSU（ロード/ストア、部分書き込みのマスク、符号拡張）、D 側メモリ IF | U | A3 |
 | C8 | W: 書き戻し、確定命令の記録の出力 | U | A4 |
 | C9 | リダイレクトバスの優先度回路と各段の kill/stall | U | C1〜C8 |
-| C11 | キャッシュの位置に置く変換器: I 側・D 側それぞれ REQ/RESP → AXI4 128bit（M0 は単一ビート、128bit から `addr[3]` で 64bit を選択、未完了 1 本でよい）。MMIO 側は M0 では未使用（D-34） | U | A3 |
+| C11 | キャッシュの位置に置く変換器: I 側・D 側キャッシュ側それぞれ REQ/RESP → AXI4 128bit（M0 は単一ビート、128bit から `addr[3]` で 64bit を選択、未完了 1 本でよい）。D 側 MMIO 側の REQ/RESP → AXI4-Lite は M2 まで未使用（D-34, D-36） | U | A3 |
 | → | **CP1** | | |
 | C10 | フォワーディング（フォワード元は絞る）、ロード結果は 2 サイクル後 | U | CP2 |
 
@@ -107,7 +107,7 @@ riscv-tests はパイプラインのハザードやストール/フラッシュ�
 | ID | 内容 | 担当 | 依存 |
 |---|---|---|---|
 | F1 | GitHub Actions: Verilator lint + ビルド + テスト + Spike 比較（ツールチェーン・Spike・Verilator はキャッシュ） | C | B7, T5 |
-| F2 | OOC 合成用 Tcl（xc7a100t-1、コア単体、配置配線まで、Fmax の求め方を決める） | C | C9 |
+| F2 | OOC 合成用 Tcl（xc7a100t-1、コア単体、配置配線まで、Fmax の求め方を決める）。確定命令の記録の出力ポートの扱い（パラメータで切る / OOC 用ラッパーで終端）を決める | C | C9 |
 | F3 | 合成結果の記録の置き場所と形式（コミットハッシュ、Fmax、LUT、FF、DSP、BRAM、クリティカルパス） | C | F2 |
 | F4 | 初回の合成とクリティカルパスのレビュー | U/C | F2, CP5 |
 

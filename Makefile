@@ -5,6 +5,8 @@
 #   make spike        Spike をビルドして build/spike/install に入れる
 #   make riscv-tests  M0 用の riscv-tests を build/riscv-tests にビルド
 #   make lint         コアの Verilator lint（警告ゼロが規則）
+#   make format       SystemVerilog を Verible で整形（既定の設定）
+#   make format-check 整形済みかどうかだけ確認（CI 用）
 #   make clean        build/ を削除（.tools/ は残す）
 
 ROOT  := $(abspath .)
@@ -53,16 +55,24 @@ riscv-tests: $(RISCV_PREFIX)gcc
 CORE_TOP ?= overisc_core
 VERILATOR ?= verilator
 
-# core.f にまだソースがない間は何もしない
-CORE_HAS_SRC := $(shell grep -vE '^\s*(//|$$|-F|-f|\+incdir|\+define)' $(ROOT)/rtl/core/core.f)
+# 最上位モジュール（ファイル名 = モジュール名）がまだない間はパッケージだけを lint する
+# （参照元がないので未使用パラメータの警告は止める）
+LINT_TOP := $(if $(wildcard $(ROOT)/rtl/core/$(CORE_TOP).sv),--top-module $(CORE_TOP),-Wno-UNUSEDPARAM)
 
 .PHONY: lint
 lint:
-ifeq ($(CORE_HAS_SRC),)
-	@echo "lint: rtl/core/core.f has no sources yet"
-else
-	$(VERILATOR) --lint-only -Wall -F $(ROOT)/rtl/core/core.f --top-module $(CORE_TOP)
-endif
+	$(VERILATOR) --lint-only -Wall -F $(ROOT)/rtl/core/core.f $(LINT_TOP)
+
+# ---- format ----
+VERIBLE_FORMAT ?= verible-verilog-format
+SV_SRCS = $(shell find $(ROOT)/rtl $(ROOT)/sim -name '*.sv' -o -name '*.svh' 2>/dev/null)
+
+.PHONY: format format-check
+format:
+	$(if $(SV_SRCS),$(VERIBLE_FORMAT) --inplace $(SV_SRCS))
+
+format-check:
+	$(if $(SV_SRCS),$(VERIBLE_FORMAT) --inplace --verify $(SV_SRCS))
 
 .PHONY: clean
 clean:

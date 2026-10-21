@@ -89,6 +89,7 @@
 - **決定**: REQ（op, paddr, size/mask, wdata, id, src, attr）/ RESP（rdata, id, beat, last, err）。全体制御は req/done の専用信号、アドレス付き一貫性メッセージはチャネル
 - **理由**: AXI と同じ規則で混乱しない。`beat` で WRAP バーストに対応、`id` で将来のノンブロッキング化に対応。無効化をチャネルにするのは、リフィルとの競合で順序を表現する必要があるため
 - **代替案**: TileLink/ACE をコア内部まで通す
+- → D-36 で変更（REQ/RESP の役割を限定し、ライン読み出しと beat/last を外した）
 
 ## D-16 データ側はキャッシュ側と MMIO 側の二つのポート
 - **決定**: キャッシュ側 ACE 128bit、MMIO 側 AXI4-Lite 64bit。AXI4-Lite の幅制約に合わせる必要なし
@@ -197,3 +198,13 @@
 - **決定**: rtl/、syn/、boards/、Top/、docs/ は CERN-OHL-P-2.0。sim/、sw/、Makefile などのビルドスクリプトは Apache-2.0。各ファイルの先頭に `SPDX-License-Identifier` を書き、本文は `LICENSES/` に置く。third_party/ のサブモジュールはそれぞれのライセンスのまま
 - **理由**: 趣味のプロジェクトで、成果を自由に使ってもらえる寛容なライセンスにしたい。CERN-OHL はハードウェア向けに作られており、ソフトウェアにはソフトウェア用のライセンスを使うことが推奨されている。Apache-2.0 は寛容で特許条項があり、CERN-OHL-P と考え方が近い。取り込む予定の部品（Spike と riscv-tests は BSD-3-Clause、pulp-platform/axi・riscv-dbg・CVFPU は Solderpad）とも衝突しない
 - **代替案**: 全体を CERN-OHL-P-2.0、ソフトウェアを MIT、強いコピーレフト（CERN-OHL-S）
+
+## D-36 モジュールのポートは構造体、REQ/RESP はフェッチ/LSU とキャッシュの位置の間
+- **決定**:
+  - モジュールのポート（コア最上位を含む）は packed 構造体の req/resp で書く。Interface は必要になったらテストベンチや SoC の配線だけで使う
+  - REQ/RESP（D-15）は「フェッチ/LSU → キャッシュの位置」の 64bit 形式に限定する。ライン読み出しと `beat`/`last` は外す（ライン単位の転送はキャッシュと AXI の間の話になったため。D-34）。命令側 1 本、データ側はキャッシュ側と MMIO 側の 2 本で、ポートが行き先を表すので `attr` も外す
+  - AXI の構造体は自前のパッケージ（`overisc_axi_pkg`）で定義し、pulp-platform/axi は使わない。フィールドの順序は pulp-platform/axi に倣うが、互換性は要件にしない
+  - パッケージ・モジュール名の接頭辞は `overisc_`
+- **理由**: 構造体はレジスタ、FIFO、スキッドバッファにそのまま通せる。Interface は記憶素子に入らず、Verilator は最上位の Interface ポートを扱えない。pulp-platform/axi は ACE（段階 2）の追加で結局改編が必要になり、common_cells を対で固定する手間もかかる。データ側を 2 本にすると、LSU が MMIO を非投機・強い順序で出す制御をポート単位で書ける
+- **代替案**: Interface、pulp-platform/axi をサブモジュールにして typedef マクロや IP を使う、データ側 REQ/RESP を 1 本にして `attr` で振り分け
+- **注意**: M4 の I$ は VIPT で F0/F1 に組み込まれるので、命令側は REQ/RESP のまま差し替えられるとは限らない
