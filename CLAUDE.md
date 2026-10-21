@@ -16,7 +16,7 @@
 **内容**: 協調シミュレーション基盤 + ユーザーレベル ISA（+ riscv-tests の `p` 環境が使う M-mode 最小サブセット）
 
 **完了条件**
-1. riscv-tests の `rv64ui-p-*`, `rv64um-p-*`, `rv64ua-p-*` がすべて PASS
+1. riscv-tests の `rv64ui-p-*`, `rv64um-p-*`, `rv64ua-p-*` がすべて PASS（`rv64ui-p-ma_data` は除く。D-31）
 2. 全テストで Spike との命令単位の比較に不一致がない
 3. CI（Verilator ビルド + テスト + Spike 比較）が通る
 4. コア単体の OOC 合成（xc7a100t-1）の Fmax / LUT / FF を記録している

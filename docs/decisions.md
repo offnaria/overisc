@@ -166,6 +166,22 @@
 - **理由**: L1 に MESI を実装するより大幅に単純で、複数コアでの Linux 起動までの距離が縮む。DMA の IO コヒーレンシ（D-19）と FENCE.I（D-20）も単純になる
 - **代償**: L2 への書き込みトラフィックが増える
 
+## D-31 `rv64ui-p-ma_data` を M0 の完了条件から外す
+- **決定**: M0 の完了条件の riscv-tests から `rv64ui-p-ma_data` を除く
+- **理由**: このテストはミスアラインのデータアクセスが成功することを前提にしている。本設計ではミスアラインを例外にして OpenSBI にエミュレートさせる（design.md §6.2）。`p` 環境にはエミュレータがないので通らない
+- **見直す条件**: ミスアラインアクセスをハードウェアで扱うことにしたとき
+
+## D-32 Spike と riscv-tests は git サブモジュールで固定する
+- **決定**: どちらもサブモジュールとして取り込み、コミットを固定する
+- **理由**: 協調シミュレーションの結果をリファレンスモデルとテストのバージョンに結び付けて再現可能にするため。CI のキャッシュキーにもサブモジュールのコミットを使える
+- **注意**: riscv-tests の `p` 環境の初期化コードや Spike の CSR の実装は版によって変わる。更新時は Spike と DUT の CSR の差を再確認する
+
+## D-33 ツールチェーンは kernel.org crosstool の GCC
+- **決定**: kernel.org の crosstool（`riscv64-linux-`、libc なし、x86_64 向けのビルド済み）の最新 GCC を主に使う。riscv-tests、ブート ROM、OpenSBI、Linux カーネルをこれでビルドする。ユーザーランドは Buildroot が作るツールチェーンに任せる
+- **理由**: riscv-tests（`-nostdlib` のアセンブリ）、OpenSBI、カーネルはいずれも libc 不要で、一つで足りる。tarball を展開するだけで最新 GCC が使え、CI でも同じ物を取得してキャッシュできる。Ubuntu 22.04 の apt 版（unknown-elf 10.2、linux-gnu 11.2）は古く、新しい binutils との組み合わせで `zicsr` まわりの問題が出やすい。ユーザーランドは lp64（ソフトウェア浮動小数点）の libc が必要で、配布物の lp64d ツールチェーンは使えないため、どの案でも Buildroot のツールチェーンになる
+- **代替案**: apt の `riscv64-unknown-elf-` / `riscv64-linux-gnu-`、riscv-collab のビルド済みツールチェーン、riscv-gnu-toolchain をソースからビルド、LLVM（カーネルと OpenSBI は対応するが riscv-tests の Makefile は GCC 前提）
+- **見直す条件**: libc が必要なベアメタルプログラム（CoreMark など）を作るとき（picolibc か riscv-collab の elf 版を追加）。LLVM はクロスチェック用に後で使ってもよい
+
 ## D-30 ベンチマークと計測の方針
 - **決定**: CoreMark/Embench は比較用の数字。フロントエンド評価は命令の使用範囲が大きいワークロード。Dhrystone は使わない。性能カウンタで CPI の内訳を作ることを重視。評価は「サイクルあたり性能 × 達成周波数」
 - **理由**: CoreMark は I$ に収まり I$/分岐予測を評価できない。Dhrystone はコンパイラ最適化で数字が大きく変わる

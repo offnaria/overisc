@@ -29,7 +29,7 @@ FPGA の BRAM は同期読み出し（結果が 1 サイクル後）であるこ
 
 | # | 内容 | 完了条件 |
 |---|---|---|
-| M0 | 協調シミュレーション基盤 + ユーザーレベル ISA | `rv64ui/um/ua-p-*` PASS、Spike と不一致なし、CI 通過、OOC 合成結果を記録 |
+| M0 | 協調シミュレーション基盤 + ユーザーレベル ISA | `rv64ui/um/ua-p-*` PASS（`ma_data` を除く）、Spike と不一致なし、CI 通過、OOC 合成結果を記録 |
 | M1 | 特権アーキテクチャ + Sv39 | `rv64mi-p-*`, `rv64si-p-*`, `rv64ui-v-*` PASS |
 | M2 | OpenSBI の起動 | OpenSBI のバナーと同梱の試験用ペイロードのメッセージが出る。Spike と不一致なし |
 | M3 | Linux 起動（シミュレーション、キャッシュなし） | initramfs の BusyBox でシェル（`/ #`）が出る |
@@ -305,7 +305,7 @@ RESP (下流 → L1/LSU): rdata, id, beat, last, err(af/hwe)
 
 | 対象 | 設定の目安 |
 |---|---|
-| ツールチェーン | 最新 GCC（`riscv64-linux-gnu-`）、`-march=rv64ima_zicsr_zifencei -mabi=lp64` |
+| ツールチェーン | kernel.org crosstool の最新 GCC（`riscv64-linux-`、libc なし）で riscv-tests / ブート ROM / OpenSBI / Linux をビルド。`-march=rv64ima_zicsr_zifencei -mabi=lp64`。ユーザーランドは Buildroot が作るツールチェーン（D-33） |
 | OpenSBI | 最新リリース。`PLATFORM=generic PLATFORM_RISCV_ISA=rv64ima_zicsr_zifencei PLATFORM_RISCV_ABI=lp64`、`FW_PAYLOAD`（M2 はペイロード未指定で同梱の試験用ペイロード、M3 は Linux Image）、`FW_TEXT_START=0x80000000` |
 | Linux | 最新安定版。`CONFIG_RISCV_ISA_C=n`、`CONFIG_FPU=n`、`CONFIG_HVC_RISCV_SBI=y`（依存関係はバージョンにより要確認）、earlycon=sbi、それ以外は最小構成 |
 | Buildroot | ISA 個別指定で C/F/D を外す、ABI lp64（ソフトウェア浮動小数点）、initramfs に BusyBox（設定項目名は要確認） |
