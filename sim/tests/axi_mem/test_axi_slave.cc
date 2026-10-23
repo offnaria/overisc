@@ -4,9 +4,10 @@
 //
 // The master never has two in-flight transactions touching the same bytes when one of them
 // is a write, so the expected data is unambiguous regardless of reordering.
-//
-// usage: test_axi_slave [seed] [profile] [cycles]
 #include <algorithm>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+#include <catch2/generators/catch_generators_range.hpp>
 #include <cinttypes>
 #include <cstdarg>
 #include <cstdio>
@@ -66,15 +67,15 @@ uint64_t ref_lanes(uint64_t addr, uint8_t size) {
   return m;
 }
 
-[[noreturn]] void die(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
+// Fails the current test case (FAIL throws, so callers do not continue).
+void die(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 void die(const char* fmt, ...) {
+  char buf[512];
   va_list ap;
   va_start(ap, fmt);
-  std::fprintf(stderr, "FAIL: ");
-  std::vfprintf(stderr, fmt, ap);
-  std::fprintf(stderr, "\n");
+  std::vsnprintf(buf, sizeof(buf), fmt, ap);
   va_end(ap);
-  std::exit(1);
+  FAIL(buf);
 }
 
 class Master {
@@ -292,8 +293,9 @@ class Master {
   std::map<uint64_t, uint8_t> shadow_;
 };
 
-// A master that drops ARVALID before ARREADY must be caught.
-void test_violation() {
+}  // namespace
+
+TEST_CASE("AxiSlave detects ARVALID dropped before ARREADY", "[axi]") {
   SimMemory mem;
   mem.add_region(kBase, kSize);
   AxiSlave s("viol", mem, kBus);
@@ -303,19 +305,19 @@ void test_violation() {
   AxiSlaveIn in;
   in.ar_valid = true;
   in.ar.addr = kBase;
-  if (!s.step(in)) die("violation test: unexpected error: %s", s.error().c_str());
+  REQUIRE(s.step(in));
   in.ar_valid = false;
-  if (s.step(in)) die("violation test: dropped ARVALID was not detected");
+  REQUIRE_FALSE(s.step(in));
+  CHECK(s.error().find("AR valid dropped") != std::string::npos);
 }
 
-// A strobe below the start address of an unaligned INCR burst must be caught.
-void test_bad_strobe() {
+TEST_CASE("AxiSlave detects WSTRB outside the active lanes", "[axi]") {
   SimMemory mem;
   mem.add_region(kBase, kSize);
   AxiSlave s("strb", mem, kBus);
   s.reset(1, AxiTiming{});
   AxiSlaveIn in;
-  if (!s.step(in)) die("bad strobe test: idle cycle failed");  // ready rises after reset
+  REQUIRE(s.step(in));  // ready rises after reset
   in.aw_valid = true;
   in.aw.addr = kBase + 2;  // lanes 2..3 for a 4-byte beat
   in.aw.size = 2;
@@ -323,22 +325,19 @@ void test_bad_strobe() {
   in.w_valid = true;
   in.w_strb = 0x3;  // lanes 0..1: illegal
   in.w_last = true;
-  if (s.step(in)) die("bad strobe test: strobe outside the active lanes was not detected");
+  REQUIRE_FALSE(s.step(in));
+  CHECK(s.error().find("WSTRB") != std::string::npos);
 }
 
-}  // namespace
-
-int main(int argc, char** argv) {
-  const uint64_t seed = argc > 1 ? std::strtoull(argv[1], nullptr, 0) : 1;
-  const std::string profile = argc > 2 ? argv[2] : "random";
-  const uint64_t cycles = argc > 3 ? std::strtoull(argv[3], nullptr, 0) : 200000;
-
-  test_violation();
-  test_bad_strobe();
+TEST_CASE("AxiSlave random traffic against a shadow memory", "[axi]") {
+  const std::string profile = GENERATE("fast", "small", "large", "random");
+  const uint64_t seed = GENERATE(range(1, 6));
+  const uint64_t cycles = 100000;
+  CAPTURE(profile, seed);
 
   SimRng prng(seed);
   AxiTiming t;
-  if (!AxiTiming::from_profile(profile, prng, &t)) die("unknown profile %s", profile.c_str());
+  REQUIRE(AxiTiming::from_profile(profile, prng, &t));
 
   SimMemory mem;
   mem.add_region(kBase, kSize);
@@ -354,10 +353,13 @@ int main(int argc, char** argv) {
     m.observe(in, slave.out());
     if (!slave.step(in)) die("%s", slave.error().c_str());
   }
-  std::printf("PASS seed=%" PRIu64 " profile=%s cycles=%" PRIu64 " reads=%" PRIu64
-              " writes=%" PRIu64 " decerr=%" PRIu64 " reordered=%" PRIu64
-              " interleaved=%" PRIu64 "\n",
-              seed, profile.c_str(), c, m.reads, m.writes, m.errors, m.reordered,
-              m.interleaved);
-  return 0;
+  INFO("reads=" << m.reads << " writes=" << m.writes << " decerr=" << m.errors
+                << " reordered=" << m.reordered << " interleaved=" << m.interleaved);
+  CHECK(m.reads > 0);
+  CHECK(m.writes > 0);
+  CHECK(m.errors > 0);
+  // the timing profile must actually take effect
+  if (profile == "fast") CHECK(m.reordered + m.interleaved == 0);
+  if (profile == "small") CHECK(m.reordered > 0);
+  if (profile == "large") CHECK(m.interleaved > 0);
 }

@@ -26,6 +26,11 @@ module overisc_sim_axi_mem
     input int    data_bytes
   );
   import "DPI-C" function void overisc_sim_axi_reset(input int handle);
+  import "DPI-C" function void overisc_sim_report(
+    input int     kind,
+    input longint value,
+    input longint cycles
+  );
   import "DPI-C" function int overisc_sim_axi_step(
     input int handle,
     input bit aw_valid,
@@ -74,40 +79,46 @@ module overisc_sim_axi_mem
       overisc_sim_axi_reset(handle);
       resp <= '0;
     end else begin
-      if (overisc_sim_axi_step(
-              handle,
-              req.aw_valid,
-              int'(req.aw.id),
-              longint'(req.aw.addr),
-              int'(req.aw.len),
-              int'(req.aw.size),
-              int'(req.aw.burst),
-              req.w_valid,
-              DpiDataW'(req.w.data),
-              int'(req.w.strb),
-              req.w.last,
-              req.b_ready,
-              req.ar_valid,
-              int'(req.ar.id),
-              longint'(req.ar.addr),
-              int'(req.ar.len),
-              int'(req.ar.size),
-              int'(req.ar.burst),
-              req.r_ready,
-              aw_ready,
-              w_ready,
-              ar_ready,
-              b_valid,
-              b_id,
-              b_resp,
-              r_valid,
-              r_id,
-              r_data,
-              r_resp,
-              r_last
-          ) != 0) begin
+      // Keep the call out of the if condition: Verilator 5.026 was seen evaluating a DPI call
+      // in a condition twice per edge, which steps the slave twice.
+      automatic
+      int
+      status = overisc_sim_axi_step(
+          handle,
+          req.aw_valid,
+          int'(req.aw.id),
+          longint'(req.aw.addr),
+          int'(req.aw.len),
+          int'(req.aw.size),
+          int'(req.aw.burst),
+          req.w_valid,
+          DpiDataW'(req.w.data),
+          int'(req.w.strb),
+          req.w.last,
+          req.b_ready,
+          req.ar_valid,
+          int'(req.ar.id),
+          longint'(req.ar.addr),
+          int'(req.ar.len),
+          int'(req.ar.size),
+          int'(req.ar.burst),
+          req.r_ready,
+          aw_ready,
+          w_ready,
+          ar_ready,
+          b_valid,
+          b_id,
+          b_resp,
+          r_valid,
+          r_id,
+          r_data,
+          r_resp,
+          r_last
+      );
+      if (status != 0) begin
         // $fatal aborts (and dumps core) in Verilator; finish cleanly so traces are flushed
         $display("ERROR %s: AXI protocol violation (see message above)", NAME);
+        overisc_sim_report(4, 0, 0);  // SimResultKind::kError
         $finish;
       end
       resp.aw_ready <= aw_ready;

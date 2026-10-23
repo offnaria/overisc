@@ -5,8 +5,8 @@
 // tohost protocol (riscv-tests): the program writes (test_number << 1) | 1 to tohost;
 // 1 means pass.
 //
-// Prints exactly one result line starting with PASS, FAIL, TIMEOUT or ERROR and calls
-// $finish, so scripts decide by that line.
+// Reports the outcome once through overisc_sim_report() (read by the C++ harness, see
+// sim_state.h), prints one line starting with PASS, FAIL, TIMEOUT or ERROR, and calls $finish.
 //
 // plusargs:
 //   +elf=<path>            program to load (required)
@@ -35,6 +35,23 @@ module overisc_sim_host #(
     output longint tohost
   );
   import "DPI-C" function longint overisc_sim_mem_read64(input longint addr);
+  import "DPI-C" function void overisc_sim_report(
+    input int     kind,
+    input longint value,
+    input longint cycles
+  );
+
+  // SimResultKind in sim_state.h
+  localparam int ResultPass = 1;
+  localparam int ResultFail = 2;
+  localparam int ResultTimeout = 3;
+  localparam int ResultError = 4;
+
+  task automatic error(input string msg);
+    $display("ERROR: %s", msg);
+    overisc_sim_report(ResultError, 0, 0);
+    $finish;
+  endtask
 
   string elf;
   longint tohost_addr;
@@ -54,21 +71,16 @@ module overisc_sim_host #(
     void'($value$plusargs("mem_profile=%s", profile));
     void'($value$plusargs("max_cycles=%d", max_cycles));
     if (!$value$plusargs("elf=%s", elf)) begin
-      $display("ERROR: +elf=<path> is required");
-      $finish;
+      error("+elf=<path> is required");
     end else if (overisc_sim_init(seed, profile, DRAM_BASE, DRAM_SIZE) != 0) begin
-      $display("ERROR: unknown +mem_profile=%s", profile);
-      $finish;
+      error($sformatf("unknown +mem_profile=%s", profile));
     end else if (overisc_sim_load_elf(elf, entry, tohost_addr) != 0) begin
-      $display("ERROR: cannot load %s", elf);
-      $finish;
+      error($sformatf("cannot load %s", elf));
     end else if (entry != RESET_VECTOR) begin
-      $display("ERROR: %s: entry point 0x%0h differs from the reset vector 0x%0h", elf, entry,
-               RESET_VECTOR);
-      $finish;
+      error($sformatf("%s: entry point 0x%0h differs from the reset vector 0x%0h", elf, entry,
+                      RESET_VECTOR));
     end else if (tohost_addr < 0) begin
-      $display("ERROR: %s: no tohost symbol", elf);
-      $finish;
+      error($sformatf("%s: no tohost symbol", elf));
     end else begin
       $display("[host] elf=%s seed=%0d mem_profile=%s tohost=0x%0h", elf, seed, profile,
                tohost_addr);
@@ -81,12 +93,18 @@ module overisc_sim_host #(
       cycles <= cycles + 1;
       if (v != 0) begin
         done <= 1'b1;
-        if (v == 1) $display("PASS %s (%0d cycles)", elf, cycles + 1);
-        else $display("FAIL %s: test %0d (tohost=0x%0h, %0d cycles)", elf, v >>> 1, v, cycles + 1);
+        if (v == 1) begin
+          $display("PASS %s (%0d cycles)", elf, cycles + 1);
+          overisc_sim_report(ResultPass, v, cycles + 1);
+        end else begin
+          $display("FAIL %s: test %0d (tohost=0x%0h, %0d cycles)", elf, v >>> 1, v, cycles + 1);
+          overisc_sim_report(ResultFail, v, cycles + 1);
+        end
         $finish;
       end else if (cycles + 1 >= max_cycles) begin
         done <= 1'b1;
         $display("TIMEOUT %s: no write to tohost in %0d cycles", elf, max_cycles);
+        overisc_sim_report(ResultTimeout, 0, cycles + 1);
         $finish;
       end
     end

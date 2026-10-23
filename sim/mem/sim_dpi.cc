@@ -14,6 +14,7 @@
 #include "axi_slave.h"
 #include "elf_loader.h"
 #include "sim_memory.h"
+#include "sim_state.h"
 #include "svdpi.h"
 
 namespace {
@@ -23,6 +24,7 @@ struct State {
   std::vector<std::unique_ptr<AxiSlave>> ports;
   uint64_t seed = 1;
   std::string profile = "fast";
+  SimResult result;
 };
 
 State& state() {
@@ -41,7 +43,26 @@ void pack(const uint8_t* bytes, svBitVecVal* v, unsigned n) {
 
 }  // namespace
 
-SimMemory& overisc_sim_memory() { return state().mem; }
+void sim_reset_state() { state() = State{}; }
+
+const SimResult& sim_result() { return state().result; }
+
+SimMemory& sim_memory() { return state().mem; }
+
+std::string to_string(SimResultKind kind) {
+  switch (kind) {
+    case SimResultKind::kPass:
+      return "PASS";
+    case SimResultKind::kFail:
+      return "FAIL";
+    case SimResultKind::kTimeout:
+      return "TIMEOUT";
+    case SimResultKind::kError:
+      return "ERROR";
+    default:
+      return "NONE";
+  }
+}
 
 extern "C" {
 
@@ -141,6 +162,15 @@ int overisc_sim_load_elf(const char* path, long long* entry, long long* tohost) 
   const auto it = image.symbols.find("tohost");
   *tohost = it == image.symbols.end() ? -1 : static_cast<long long>(it->second);
   return 0;
+}
+
+// Outcome of the run, reported by the SV side (kind: SimResultKind). The first report wins.
+void overisc_sim_report(int kind, long long value, long long cycles) {
+  SimResult& r = state().result;
+  if (r.kind != SimResultKind::kNone) return;
+  r.kind = static_cast<SimResultKind>(kind);
+  r.value = static_cast<uint64_t>(value);
+  r.cycles = static_cast<uint64_t>(cycles);
 }
 
 // Backdoor access for testbenches (ELF loading, tohost polling, checks).

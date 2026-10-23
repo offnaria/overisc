@@ -25,6 +25,11 @@ module tb_axi_mem;
     input longint dram_size
   );
   import "DPI-C" function longint overisc_sim_mem_read64(input longint addr);
+  import "DPI-C" function void overisc_sim_report(
+    input int     kind,
+    input longint value,
+    input longint cycles
+  );
 
   logic clk = 1'b0;
   logic rst = 1'b1;
@@ -243,6 +248,7 @@ module tb_axi_mem;
 
     if (errors == 0) $display("PASS seed=%0d profile=%s iters=%0d", seed, profile, iters);
     else $display("FAIL: %0d errors", errors);
+    overisc_sim_report(errors == 0 ? 1 : 2, longint'(errors), 0);  // SimResultKind
     $finish;
   end
 

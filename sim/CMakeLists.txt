@@ -1,0 +1,114 @@
+# SPDX-License-Identifier: Apache-2.0
+# シミュレーションと試験のビルド（CMake + CTest + Catch2 + Verilator、D-37）
+#
+# 通常はトップの Makefile から使う（make sim / make test）。直接使う場合:
+#   cmake -S sim -B build/sim -DRVTESTS_DIR=... -DRISCV_PREFIX=...
+#   cmake --build build/sim -j
+#   ctest --test-dir build/sim -j
+cmake_minimum_required(VERSION 3.22)
+project(overisc_sim CXX)
+
+set(CMAKE_CXX_STANDARD 20)  # Verilator --timing uses coroutines
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+set(OVERISC_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
+set(RVTESTS_DIR ${OVERISC_ROOT}/build/riscv-tests CACHE PATH "riscv-tests build directory")
+set(RISCV_PREFIX "riscv64-linux-" CACHE STRING "RISC-V toolchain prefix (may include a path)")
+
+find_package(verilator REQUIRED HINTS $ENV{VERILATOR_ROOT})
+add_subdirectory(${OVERISC_ROOT}/third_party/Catch2 catch2 EXCLUDE_FROM_ALL)
+include(CTest)
+include(Catch)
+
+set(COMMON_F ${OVERISC_ROOT}/rtl/common/common.f)
+set(MEM_F ${CMAKE_CURRENT_SOURCE_DIR}/mem/mem.f)
+set(VERILATOR_WARN -Wall)
+
+# ---- C++ models (memory, AXI slave, ELF loader, DPI) ----
+add_library(overisc_sim STATIC
+  mem/sim_memory.cc
+  mem/axi_slave.cc
+  mem/elf_loader.cc
+  mem/sim_dpi.cc
+)
+target_include_directories(overisc_sim PUBLIC
+  mem
+  harness
+  ${OVERISC_ROOT}/third_party/ELFIO
+  ${VERILATOR_ROOT}/include
+  ${VERILATOR_ROOT}/include/vltstd
+)
+target_compile_options(overisc_sim PRIVATE -Wall -Wextra)
+
+# ---- pure C++ unit tests ----
+add_executable(test_unit
+  tests/axi_mem/test_axi_slave.cc
+  tests/host/test_elf_loader.cc
+)
+target_link_libraries(test_unit PRIVATE overisc_sim Catch2::Catch2WithMain)
+target_compile_definitions(test_unit PRIVATE
+  RVTESTS_DIR="${RVTESTS_DIR}" RISCV_PREFIX="${RISCV_PREFIX}")
+target_compile_options(test_unit PRIVATE -Wall -Wextra)
+catch_discover_tests(test_unit PROPERTIES LABELS "unit")
+
+# ---- Verilated tests ----
+# The memory smoke test generates its own clock (timed model).
+add_executable(test_axi_mem_glue tests/axi_mem/test_axi_mem_glue.cc)
+target_link_libraries(test_axi_mem_glue PRIVATE overisc_sim Catch2::Catch2WithMain)
+verilate(test_axi_mem_glue
+  PREFIX Vtb_axi_mem TOP_MODULE tb_axi_mem
+  SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tests/axi_mem/tb_axi_mem.sv
+  VERILATOR_ARGS ${VERILATOR_WARN} --timing -F ${COMMON_F} -F ${MEM_F})
+catch_discover_tests(test_axi_mem_glue PROPERTIES LABELS "verilator")
+
+# The host module alone, clocked from C++. The second model checks the reset-vector check.
+add_executable(test_host tests/host/test_host.cc)
+target_link_libraries(test_host PRIVATE overisc_sim Catch2::Catch2WithMain)
+target_compile_definitions(test_host PRIVATE RVTESTS_DIR="${RVTESTS_DIR}")
+verilate(test_host
+  PREFIX Vovl_host TOP_MODULE overisc_sim_host
+  SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mem/overisc_sim_host.sv
+  VERILATOR_ARGS ${VERILATOR_WARN})
+verilate(test_host
+  PREFIX Vovl_host_rv1000 TOP_MODULE overisc_sim_host
+  SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mem/overisc_sim_host.sv
+  VERILATOR_ARGS ${VERILATOR_WARN} -GRESET_VECTOR=64'h1000)
+catch_discover_tests(test_host PROPERTIES LABELS "verilator")
+
+# ---- core (B4) ----
+# One CTest per riscv-test x seed x memory profile, labeled "riscv-tests".
+set(REGRESSION_SEEDS "1" CACHE STRING "seeds for the riscv-tests regression")
+set(REGRESSION_PROFILES "fast;small;large;random" CACHE STRING
+    "memory timing profiles for the riscv-tests regression")
+set(CORE_RESET_VECTOR "64'h8000_0000")
+
+add_executable(test_core tests/core/test_core.cc)
+target_link_libraries(test_core PRIVATE overisc_sim Catch2::Catch2)
+verilate(test_core
+  PREFIX Vtb_core TOP_MODULE tb_core TRACE_FST
+  SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tb/tb_core.sv
+  VERILATOR_ARGS ${VERILATOR_WARN} -F ${CMAKE_CURRENT_SOURCE_DIR}/sim.f
+    -GRESET_VECTOR=${CORE_RESET_VECTOR}
+    --x-assign unique --x-initial unique)
+
+set(M0_LIST ${RVTESTS_DIR}/m0.list)
+if(EXISTS ${M0_LIST})
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${M0_LIST})
+  file(STRINGS ${M0_LIST} M0_TESTS)
+  foreach(profile IN LISTS REGRESSION_PROFILES)
+    foreach(seed IN LISTS REGRESSION_SEEDS)
+      foreach(t IN LISTS M0_TESTS)
+        add_test(NAME "riscv-tests/${profile}/${seed}/${t}"
+          COMMAND test_core --elf ${RVTESTS_DIR}/${t} --seed ${seed} --profile ${profile})
+        set_tests_properties("riscv-tests/${profile}/${seed}/${t}" PROPERTIES
+          LABELS "riscv-tests;core")
+      endforeach()
+    endforeach()
+  endforeach()
+else()
+  message(WARNING "${M0_LIST} not found; run `make riscv-tests` and reconfigure")
+endif()

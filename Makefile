@@ -6,8 +6,8 @@
 #   make riscv-tests  M0 用の riscv-tests を build/riscv-tests にビルド
 #   make lint         コアの Verilator lint（警告ゼロが規則）
 #   make format       SystemVerilog を Verible で整形（既定の設定）
-#   make test-axi-mem シミュレーション用メモリモデルの単体試験（B9）
-#   make test-host    ELF 読み込みと tohost 監視の単体試験（B3）
+#   make sim          シミュレーションと試験をビルド（build/sim、CMake）
+#   make test         全試験を CTest で並列実行（例: make test CTEST_ARGS="-L unit"）
 #   make format-check 整形済みかどうかだけ確認（CI 用）
 #   make clean        build/ を削除（.tools/ は残す）
 
@@ -65,62 +65,20 @@ LINT_TOP := $(if $(wildcard $(ROOT)/rtl/core/$(CORE_TOP).sv),--top-module $(CORE
 lint:
 	$(VERILATOR) --lint-only -Wall -F $(ROOT)/rtl/core/core.f $(LINT_TOP)
 
-# ---- シミュレーション用メモリモデルの単体試験（B9） ----
-CXX       ?= g++
-CXXFLAGS  ?= -std=c++17 -O2 -Wall -Wextra
-SIM_MEM   := $(ROOT)/sim/mem
-AXI_TEST  := $(BUILD)/tests/axi_mem
-AXI_SEEDS ?= 1 2 3 4 5
-AXI_PROFILES := fast small large random
+# ---- シミュレーションと試験（CMake + CTest + Catch2、D-37） ----
+SIM_BUILD := $(BUILD)/sim
+CTEST_ARGS ?=
 
-$(AXI_TEST)/test_axi_slave: $(ROOT)/sim/tests/axi_mem/test_axi_slave.cc $(wildcard $(SIM_MEM)/*.cc $(SIM_MEM)/*.h)
-	mkdir -p $(AXI_TEST)
-	$(CXX) $(CXXFLAGS) -I$(SIM_MEM) $< $(SIM_MEM)/axi_slave.cc $(SIM_MEM)/sim_memory.cc -o $@
+# riscv-tests の一覧（m0.list）を configure 時に読むので、先にビルドしておく
+.PHONY: sim
+sim: riscv-tests
+	cmake -S $(ROOT)/sim -B $(SIM_BUILD) -DRVTESTS_DIR=$(RVTESTS_BUILD) -DRISCV_PREFIX=$(RISCV_PREFIX) > /dev/null
+	cmake --build $(SIM_BUILD) -j
+	@ln -sf $(SIM_BUILD)/compile_commands.json $(ROOT)/compile_commands.json
 
-$(AXI_TEST)/Vtb_axi_mem: $(ROOT)/sim/tests/axi_mem/tb_axi_mem.sv $(wildcard $(SIM_MEM)/*) $(ROOT)/rtl/common/overisc_axi_pkg.sv
-	$(VERILATOR) --binary --timing -j 0 -Wall --top-module tb_axi_mem \
-	    -F $(ROOT)/rtl/common/common.f -F $(SIM_MEM)/mem.f $< \
-	    -CFLAGS "-std=c++17 -I$(SIM_MEM)" --Mdir $(AXI_TEST)/obj -o $@ > $(AXI_TEST)/verilate.log
-
-.PHONY: test-axi-mem
-test-axi-mem: $(AXI_TEST)/test_axi_slave $(AXI_TEST)/Vtb_axi_mem
-	@set -e; for p in $(AXI_PROFILES); do for s in $(AXI_SEEDS); do \
-	    $(AXI_TEST)/test_axi_slave $$s $$p 100000; done; done
-	@set -e; for p in $(AXI_PROFILES); do for s in $(AXI_SEEDS); do \
-	    log=$(AXI_TEST)/tb_$${p}_$${s}.log; \
-	    $(AXI_TEST)/Vtb_axi_mem +seed=$$s +mem_profile=$$p > $$log 2>&1 || true; \
-	    grep -E '^(PASS|FAIL)|ERROR|violation' $$log; grep -q '^PASS' $$log; done; done
-
-# ---- ELF 読み込みと tohost 監視の単体試験（B3） ----
-HOST_TEST := $(BUILD)/tests/host
-
-$(HOST_TEST)/test_elf_loader: $(ROOT)/sim/tests/host/test_elf_loader.cc $(wildcard $(SIM_MEM)/*.cc $(SIM_MEM)/*.h)
-	mkdir -p $(HOST_TEST)
-	$(CXX) $(CXXFLAGS) -I$(SIM_MEM) $< $(SIM_MEM)/elf_loader.cc $(SIM_MEM)/sim_memory.cc -o $@
-
-$(HOST_TEST)/Vtb_host: $(ROOT)/sim/tests/host/tb_host.sv $(wildcard $(SIM_MEM)/*) $(ROOT)/rtl/common/overisc_axi_pkg.sv
-	$(VERILATOR) --binary --timing -j 0 -Wall --top-module tb_host \
-	    -F $(ROOT)/rtl/common/common.f -F $(SIM_MEM)/mem.f $< \
-	    -CFLAGS "-std=c++17 -I$(SIM_MEM)" --Mdir $(HOST_TEST)/obj -o $@ > $(HOST_TEST)/verilate.log
-
-# 期待する結果の行の先頭とプラス引数の組
-HOST_CASES := PASS:+fake_tohost=1 FAIL:+fake_tohost=7 TIMEOUT:+max_cycles=500 \
-              ERROR:+elf=/nonexistent
-
-.PHONY: test-host
-test-host: riscv-tests $(HOST_TEST)/test_elf_loader $(HOST_TEST)/Vtb_host
-	@set -e; n=0; for t in $$(cat $(RVTESTS_BUILD)/m0.list) rv64ui-p-ma_data; do \
-	    elf=$(RVTESTS_BUILD)/$$t; \
-	    $(RISCV_PREFIX)objcopy -O binary $$elf $(HOST_TEST)/$$t.bin; \
-	    th=$$($(RISCV_PREFIX)nm $$elf | awk '$$3 == "tohost" { print $$1 }'); \
-	    $(HOST_TEST)/test_elf_loader $$elf $(HOST_TEST)/$$t.bin $$th; n=$$((n+1)); done; \
-	    echo "PASS test_elf_loader ($$n ELF files)"
-	@set -e; elf=$(RVTESTS_BUILD)/rv64ui-p-simple; for c in $(HOST_CASES); do \
-	    want=$${c%%:*}; arg=$${c#*:}; log=$(HOST_TEST)/tb_$$want.log; \
-	    $(HOST_TEST)/Vtb_host $$arg +elf=$$elf > $$log 2>&1 || true; \
-	    line=$$(grep -E '^(PASS|FAIL|TIMEOUT|ERROR)' $$log | head -1); \
-	    case "$$line" in "$$want"*) echo "ok   [$$want] $$line";; \
-	    *) echo "FAIL expected $$want, got: $$line"; exit 1;; esac; done
+.PHONY: test
+test: sim
+	ctest --test-dir $(SIM_BUILD) -j $$(nproc) --output-on-failure $(CTEST_ARGS)
 
 # ---- format ----
 VERIBLE_FORMAT ?= verible-verilog-format

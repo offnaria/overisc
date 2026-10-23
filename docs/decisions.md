@@ -208,3 +208,14 @@
 - **理由**: 構造体はレジスタ、FIFO、スキッドバッファにそのまま通せる。Interface は記憶素子に入らず、Verilator は最上位の Interface ポートを扱えない。pulp-platform/axi は ACE（段階 2）の追加で結局改編が必要になり、common_cells を対で固定する手間もかかる。データ側を 2 本にすると、LSU が MMIO を非投機・強い順序で出す制御をポート単位で書ける
 - **代替案**: Interface、pulp-platform/axi をサブモジュールにして typedef マクロや IP を使う、データ側 REQ/RESP を 1 本にして `attr` で振り分け
 - **注意**: M4 の I$ は VIPT で F0/F1 に組み込まれるので、命令側は REQ/RESP のまま差し替えられるとは限らない
+
+## D-37 試験の仕組みは CMake + CTest + Catch2、ELF の読み込みは ELFIO
+- **決定**:
+  - シミュレーションと試験のビルドは CMake（Verilator の `verilate()`）、実行は CTest、試験の記述は Catch2 v3。トップの Makefile は入口として残し、`make sim` / `make test` から CMake を呼ぶ
+  - Verilator のモデルは C++ のハーネス（`sim/harness/sim_run.h`）からクロックを駆動する。結果は SV 側から DPI（`overisc_sim_report`）で C++ に渡し、テキストの解析に頼らない
+  - riscv-tests の回帰試験は「テスト × シード × メモリのプロファイル」ごとに 1 件の CTest として登録し（ラベル `riscv-tests`）、別プロセスで並列に実行する
+  - 未リセットの状態は毎回ランダムな初期値で始める（`--x-initial unique` と `+verilator+rand+reset+2`、シードは試験のシード）
+  - ELF の読み込みは ELFIO（ヘッダのみ、MIT）。Catch2（BSL-1.0）と ELFIO はサブモジュールでタグに固定（D-32）
+- **理由**: 実装者に Catch2 + Verilator + CMake/CTest での回帰試験の経験がある。CTest で試験ごとにプロセスが分かれるので、並列実行でき、DPI 側の静的な状態も干渉しない。C++ からクロックを駆動すると `--timing` が不要になり、手続き型のマスタと `always` の順序の競合も起きない。ランダムな初期値は「データパスはリセットしない」規則のもとでリセット漏れを見つけるため
+- **代替案**: Make のまま Catch2 の単一ファイル版、Google Test、SV の自己検査テストベンチを `--binary` で実行（B2/B3 の最初の形）、自前の ELF ローダ、Spike（libfesvr）の ELF ローダ
+- **注意**: Verilator 5.026 で、`if` の条件式の中の DPI 呼び出しが 1 エッジに 2 回評価されるのを確認した（`overisc_sim_axi_mem.sv`）。副作用のある DPI 呼び出しは条件式に書かず、いったん変数に受ける
