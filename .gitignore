@@ -1,3 +1,4 @@
 /build/
 /.tools/
 /compile_commands.json
+/.cache/
