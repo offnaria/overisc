@@ -6,3 +6,4 @@
 overisc_cfg_pkg.sv
 overisc_mem_pkg.sv
 overisc_commit_pkg.sv
+overisc_core_top.sv
