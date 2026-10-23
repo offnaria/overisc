@@ -6,6 +6,7 @@
 #   make riscv-tests  M0 用の riscv-tests を build/riscv-tests にビルド
 #   make lint         コアの Verilator lint（警告ゼロが規則）
 #   make format       SystemVerilog を Verible で整形（既定の設定）
+#   make test-axi-mem シミュレーション用メモリモデルの単体試験（B9）
 #   make format-check 整形済みかどうかだけ確認（CI 用）
 #   make clean        build/ を削除（.tools/ は残す）
 
@@ -52,7 +53,7 @@ riscv-tests: $(RISCV_PREFIX)gcc
 	    src_dir=$(RVTESTS_SRC)/isa XLEN=64 RISCV_PREFIX=riscv64-linux- m0
 
 # ---- lint ----
-CORE_TOP ?= overisc_core
+CORE_TOP ?= overisc_core_top
 VERILATOR ?= verilator
 
 # 最上位モジュール（ファイル名 = モジュール名）がまだない間はパッケージだけを lint する
@@ -62,6 +63,32 @@ LINT_TOP := $(if $(wildcard $(ROOT)/rtl/core/$(CORE_TOP).sv),--top-module $(CORE
 .PHONY: lint
 lint:
 	$(VERILATOR) --lint-only -Wall -F $(ROOT)/rtl/core/core.f $(LINT_TOP)
+
+# ---- シミュレーション用メモリモデルの単体試験（B9） ----
+CXX       ?= g++
+CXXFLAGS  ?= -std=c++17 -O2 -Wall -Wextra
+SIM_MEM   := $(ROOT)/sim/mem
+AXI_TEST  := $(BUILD)/tests/axi_mem
+AXI_SEEDS ?= 1 2 3 4 5
+AXI_PROFILES := fast small large random
+
+$(AXI_TEST)/test_axi_slave: $(ROOT)/sim/tests/axi_mem/test_axi_slave.cc $(wildcard $(SIM_MEM)/*.cc $(SIM_MEM)/*.h)
+	mkdir -p $(AXI_TEST)
+	$(CXX) $(CXXFLAGS) -I$(SIM_MEM) $< $(SIM_MEM)/axi_slave.cc $(SIM_MEM)/sim_memory.cc -o $@
+
+$(AXI_TEST)/Vtb_axi_mem: $(ROOT)/sim/tests/axi_mem/tb_axi_mem.sv $(wildcard $(SIM_MEM)/*) $(ROOT)/rtl/common/overisc_axi_pkg.sv
+	$(VERILATOR) --binary --timing -j 0 -Wall -Wno-fatal --top-module tb_axi_mem \
+	    -F $(ROOT)/rtl/common/common.f -F $(SIM_MEM)/mem.f $< \
+	    -CFLAGS "-std=c++17 -I$(SIM_MEM)" --Mdir $(AXI_TEST)/obj -o $@ > $(AXI_TEST)/verilate.log
+
+.PHONY: test-axi-mem
+test-axi-mem: $(AXI_TEST)/test_axi_slave $(AXI_TEST)/Vtb_axi_mem
+	@set -e; for p in $(AXI_PROFILES); do for s in $(AXI_SEEDS); do \
+	    $(AXI_TEST)/test_axi_slave $$s $$p 100000; done; done
+	@set -e; for p in $(AXI_PROFILES); do for s in $(AXI_SEEDS); do \
+	    log=$(AXI_TEST)/tb_$${p}_$${s}.log; \
+	    $(AXI_TEST)/Vtb_axi_mem +seed=$$s +mem_profile=$$p > $$log 2>&1 || true; \
+	    grep -E '^(PASS|FAIL)|ERROR|violation' $$log; grep -q '^PASS' $$log; done; done
 
 # ---- format ----
 VERIBLE_FORMAT ?= verible-verilog-format

@@ -61,6 +61,7 @@ make spike         # Spike を build/spike/install にビルド
 make riscv-tests   # M0 用テストを build/riscv-tests にビルド（実行対象は m0.list）
 make lint          # コアの Verilator lint（-Wall、警告ゼロ）
 make format        # SystemVerilog を Verible で整形（既定の設定）
+make test-axi-mem  # シミュレーション用メモリモデルの単体試験（C++ と Verilator）
 ```
 
 ## ファイルリストの規則
