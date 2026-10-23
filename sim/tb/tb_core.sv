@@ -62,6 +62,15 @@ module tb_core
       .resp(io_resp)
   );
 
+`ifdef OVERISC_KONATA
+  // Kanata log (+konata=<file>); needs the core's internal `trace` signal
+  overisc_sim_konata u_konata (
+      .clk  (clk),
+      .rst  (rst),
+      .trace(u_core.trace)
+  );
+`endif
+
   overisc_sim_host #(
       .RESET_VECTOR(RESET_VECTOR)
   ) u_host (

@@ -18,6 +18,8 @@ endif()
 set(OVERISC_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
 set(RVTESTS_DIR ${OVERISC_ROOT}/build/riscv-tests CACHE PATH "riscv-tests build directory")
 set(RISCV_PREFIX "riscv64-linux-" CACHE STRING "RISC-V toolchain prefix (may include a path)")
+set(SPIKE_HOME ${OVERISC_ROOT}/build/spike/install CACHE PATH "Spike install directory (make spike)")
+option(OVERISC_KONATA "Hook the Kanata logger to the core (needs the core's trace signal)" OFF)
 
 find_package(verilator REQUIRED HINTS $ENV{VERILATOR_ROOT})
 add_subdirectory(${OVERISC_ROOT}/third_party/Catch2 catch2 EXCLUDE_FROM_ALL)
@@ -34,9 +36,13 @@ add_library(overisc_sim STATIC
   mem/axi_slave.cc
   mem/elf_loader.cc
   mem/sim_dpi.cc
+  trace/konata_tracer.cc
+  trace/konata_label.cc
+  trace/konata_dpi.cc
 )
 target_include_directories(overisc_sim PUBLIC
   mem
+  trace
   harness
   ${OVERISC_ROOT}/third_party/ELFIO
   ${VERILATOR_ROOT}/include
@@ -44,12 +50,25 @@ target_include_directories(overisc_sim PUBLIC
 )
 target_compile_options(overisc_sim PRIVATE -Wall -Wextra)
 
+# Spike's disassembler for Kanata labels (optional)
+find_library(SPIKE_DISASM disasm PATHS ${SPIKE_HOME}/lib NO_DEFAULT_PATH)
+find_library(SPIKE_RISCV riscv PATHS ${SPIKE_HOME}/lib NO_DEFAULT_PATH)
+if(SPIKE_DISASM AND SPIKE_RISCV)
+  target_include_directories(overisc_sim PRIVATE ${SPIKE_HOME}/include)
+  target_compile_definitions(overisc_sim PUBLIC OVERISC_HAVE_SPIKE_DISASM)
+  target_link_libraries(overisc_sim PUBLIC ${SPIKE_DISASM} ${SPIKE_RISCV})
+else()
+  message(STATUS "Spike not found in ${SPIKE_HOME}; Kanata labels show raw encodings")
+endif()
+
 # ---- pure C++ unit tests ----
 add_executable(test_unit
   tests/axi_mem/test_axi_slave.cc
   tests/host/test_elf_loader.cc
+  tests/konata/test_konata.cc
 )
 target_link_libraries(test_unit PRIVATE overisc_sim Catch2::Catch2WithMain)
+target_include_directories(test_unit PRIVATE tests/konata)
 target_compile_definitions(test_unit PRIVATE
   RVTESTS_DIR="${RVTESTS_DIR}" RISCV_PREFIX="${RISCV_PREFIX}")
 target_compile_options(test_unit PRIVATE -Wall -Wextra)
@@ -79,12 +98,30 @@ verilate(test_host
   VERILATOR_ARGS ${VERILATOR_WARN} -GRESET_VECTOR=64'h1000)
 catch_discover_tests(test_host PROPERTIES LABELS "verilator")
 
+# Kanata logger driven straight from C++ (must match the direct writer).
+set(TRACE_PKG ${OVERISC_ROOT}/rtl/core/overisc_trace_pkg.sv)
+add_executable(test_konata_glue tests/konata/test_konata_glue.cc)
+target_link_libraries(test_konata_glue PRIVATE overisc_sim Catch2::Catch2WithMain)
+target_include_directories(test_konata_glue PRIVATE tests/konata)
+verilate(test_konata_glue
+  PREFIX Vtb_konata TOP_MODULE tb_konata
+  SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tests/konata/tb_konata.sv
+  VERILATOR_ARGS ${VERILATOR_WARN}
+    ${OVERISC_ROOT}/rtl/core/overisc_cfg_pkg.sv ${OVERISC_ROOT}/rtl/core/overisc_commit_pkg.sv
+    ${TRACE_PKG} ${CMAKE_CURRENT_SOURCE_DIR}/trace/overisc_sim_konata.sv)
+catch_discover_tests(test_konata_glue PROPERTIES LABELS "verilator")
+
 # ---- core (B4) ----
 # One CTest per riscv-test x seed x memory profile, labeled "riscv-tests".
 set(REGRESSION_SEEDS "1" CACHE STRING "seeds for the riscv-tests regression")
 set(REGRESSION_PROFILES "fast;small;large;random" CACHE STRING
     "memory timing profiles for the riscv-tests regression")
 set(CORE_RESET_VECTOR "64'h8000_0000")
+if(OVERISC_KONATA)
+  set(KONATA_ARGS -DOVERISC_KONATA)
+else()
+  set(KONATA_ARGS)
+endif()
 
 add_executable(test_core tests/core/test_core.cc)
 target_link_libraries(test_core PRIVATE overisc_sim Catch2::Catch2)
@@ -93,7 +130,8 @@ verilate(test_core
   SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tb/tb_core.sv
   VERILATOR_ARGS ${VERILATOR_WARN} -F ${CMAKE_CURRENT_SOURCE_DIR}/sim.f
     -GRESET_VECTOR=${CORE_RESET_VECTOR}
-    --x-assign unique --x-initial unique)
+    --x-assign unique --x-initial unique
+    ${KONATA_ARGS})
 
 set(M0_LIST ${RVTESTS_DIR}/m0.list)
 if(EXISTS ${M0_LIST})

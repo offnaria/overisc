@@ -3,8 +3,9 @@
 // CTest registers one run per riscv-test x seed x memory profile (sim/CMakeLists.txt).
 //
 // usage: test_core --elf <path> [--seed <n>] [--profile <name>] [--max-cycles <n>]
-//                  [--fst <file>] [Catch2 options]
+//                  [--fst <file>] [--konata <file>] [Catch2 options]
 // The waveform can also be requested with the OVERISC_FST environment variable.
+// --konata needs the build option OVERISC_KONATA (cmake -DOVERISC_KONATA=ON).
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cinttypes>
@@ -21,6 +22,7 @@ struct Args {
   std::string profile = "fast";
   uint64_t max_cycles = 1'000'000;
   std::string fst;
+  std::string konata;
 } g_args;
 
 }  // namespace
@@ -39,6 +41,7 @@ TEST_CASE("program passes on the core", "[core]") {
   };
   opt.max_cycles = g_args.max_cycles + 1000;  // the host enforces the real limit
   opt.fst = g_args.fst.empty() ? fst_from_env() : g_args.fst;
+  if (!g_args.konata.empty()) opt.plusargs.push_back("+konata=" + g_args.konata);
 
   const SimResult r = run_clocked<Vtb_core>(opt);
   INFO("elf=" << g_args.elf << " seed=" << g_args.seed << " profile=" << g_args.profile);
@@ -55,7 +58,8 @@ int main(int argc, char* argv[]) {
              Opt(g_args.seed, "n")["--seed"]("random seed (memory timing, initial values)") |
              Opt(g_args.profile, "name")["--profile"]("memory timing: fast|small|large|random") |
              Opt(g_args.max_cycles, "n")["--max-cycles"]("cycle limit") |
-             Opt(g_args.fst, "file")["--fst"]("write an FST waveform");
+             Opt(g_args.fst, "file")["--fst"]("write an FST waveform") |
+             Opt(g_args.konata, "file")["--konata"]("write a Kanata log (Konata viewer)");
   session.cli(cli);
   if (const int rc = session.applyCommandLine(argc, argv); rc != 0) return rc;
   return session.run();

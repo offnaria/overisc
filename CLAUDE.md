@@ -65,6 +65,7 @@ make sim           # シミュレーションと試験をビルド（CMake、bui
 make test          # 全試験を CTest で並列実行（例: make test CTEST_ARGS="-L unit"）
 build/sim/test_core --elf <ELF> [--seed N] [--profile fast|small|large|random] [--fst out.fst]
                    # 1 本だけ実行（波形は --fst か環境変数 OVERISC_FST）
+                   # --konata <file> で Konata 用ログ（cmake -DOVERISC_KONATA=ON が必要）
 ```
 
 ## ファイルリストの規則

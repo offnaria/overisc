@@ -77,8 +77,8 @@ module overisc_sim_host #(
     end else if (overisc_sim_load_elf(elf, entry, tohost_addr) != 0) begin
       error($sformatf("cannot load %s", elf));
     end else if (entry != RESET_VECTOR) begin
-      error($sformatf("%s: entry point 0x%0h differs from the reset vector 0x%0h", elf, entry,
-                      RESET_VECTOR));
+      error($sformatf(
+            "%s: entry point 0x%0h differs from the reset vector 0x%0h", elf, entry, RESET_VECTOR));
     end else if (tohost_addr < 0) begin
       error($sformatf("%s: no tohost symbol", elf));
     end else begin

@@ -80,6 +80,7 @@ gtkwave add.fst
 | `--profile <name>` | fast | memory timing: `fast` (always ready, in order), `small`, `large` (long latency, reordering, interleaving), `random` (parameters drawn from the seed) |
 | `--max-cycles <n>` | 1000000 | cycle limit after reset |
 | `--fst <file>` | | write an FST waveform (also `OVERISC_FST=<file>` in the environment) |
+| `--konata <file>` | | write a pipeline log for [Konata](https://github.com/shioyadan/Konata) (needs `OVERISC_KONATA`, below) |
 
 The result line is one of:
 
@@ -91,6 +92,20 @@ The result line is one of:
 | `ERROR` | setup failure, or an AXI protocol violation by the core (the message above names the port and the rule) |
 
 Disassembly of each test is next to the ELF: `build/riscv-tests/<program>.dump`.
+
+### Pipeline view with Konata
+
+The core exposes an internal `trace` signal (`rtl/core/overisc_trace_pkg.sv`); the testbench turns
+it into a Kanata log. The hook is off until the core drives that signal:
+
+```sh
+cmake build/sim -DOVERISC_KONATA=ON && cmake --build build/sim -j
+build/sim/test_core --elf build/riscv-tests/rv64ui-p-add --konata add.log
+```
+
+Open `add.log` in Konata. Stages are `F0 F1 F2 FB D X M W`; instruction labels use Spike's
+disassembler when Spike is built (`make spike`). Fetch blocks flushed before any of their
+instructions reached D show up as flushed `fetch block` entries.
 
 ## License
 
