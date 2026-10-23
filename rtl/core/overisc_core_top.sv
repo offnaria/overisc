@@ -59,7 +59,7 @@ module overisc_core_top
         ar: '{
             default: '0,
             addr: axi_addr_t'(pc),
-            burst: AXI_BURST_WRAP,  // correct?
+            burst: AXI_BURST_INCR,  // correct?
             size: 2  // correct?
         },
         ar_valid : !rst && ibus_arvalid,
