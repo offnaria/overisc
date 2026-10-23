@@ -106,7 +106,9 @@ module overisc_sim_axi_mem
               r_resp,
               r_last
           ) != 0) begin
-        $fatal(1, "%s: AXI protocol violation (see message above)", NAME);
+        // $fatal aborts (and dumps core) in Verilator; finish cleanly so traces are flushed
+        $display("ERROR %s: AXI protocol violation (see message above)", NAME);
+        $finish;
       end
       resp.aw_ready <= aw_ready;
       resp.w_ready  <= w_ready;

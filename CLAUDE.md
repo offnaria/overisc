@@ -62,6 +62,7 @@ make riscv-tests   # M0 用テストを build/riscv-tests にビルド（実行�
 make lint          # コアの Verilator lint（-Wall、警告ゼロ）
 make format        # SystemVerilog を Verible で整形（既定の設定）
 make test-axi-mem  # シミュレーション用メモリモデルの単体試験（C++ と Verilator）
+make test-host     # ELF 読み込みと tohost 監視の単体試験
 ```
 
 ## ファイルリストの規則

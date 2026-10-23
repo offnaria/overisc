@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-// DPI functions behind overisc_sim_axi_mem.sv. All ports share one SimMemory.
+// DPI functions of the simulation models: the AXI memory ports (overisc_sim_axi_mem.sv) and
+// the host side (overisc_sim_host.sv: ELF loading, tohost polling). All share one SimMemory.
 //
-// Initialization order: the testbench calls overisc_sim_init() at time 0; each
+// Initialization order: overisc_sim_host calls overisc_sim_init() at time 0; each
 // overisc_sim_axi_mem instance registers itself with overisc_sim_axi_new() and picks up the
 // seed and timing profile when it is reset (reset is asserted after time 0).
 #include <cstdio>
@@ -11,6 +12,7 @@
 #include <vector>
 
 #include "axi_slave.h"
+#include "elf_loader.h"
 #include "sim_memory.h"
 #include "svdpi.h"
 
@@ -124,6 +126,20 @@ int overisc_sim_axi_step(int handle,
   pack(o.r_data, r_data, kAxiMaxDataBytes);
   *r_resp = o.r_resp;
   *r_last = o.r_last;
+  return 0;
+}
+
+// Loads an ELF file. *tohost is -1 if the symbol is missing. Returns 0 on success.
+int overisc_sim_load_elf(const char* path, long long* entry, long long* tohost) {
+  ElfImage image;
+  std::string err;
+  if (!load_elf(path, state().mem, &image, &err)) {
+    std::fprintf(stderr, "overisc_sim_load_elf: %s\n", err.c_str());
+    return -1;
+  }
+  *entry = static_cast<long long>(image.entry);
+  const auto it = image.symbols.find("tohost");
+  *tohost = it == image.symbols.end() ? -1 : static_cast<long long>(it->second);
   return 0;
 }
 

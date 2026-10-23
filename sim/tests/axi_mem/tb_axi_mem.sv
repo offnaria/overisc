@@ -193,11 +193,11 @@ module tb_axi_mem;
     wait_cycle();
 
     for (int n = 0; n < iters; n++) begin
-      int size = $urandom_range(4);
-      int len = $urandom_range(7);
-      longint nbytes = 64'(1) << size;
-      longint addr = DramBase + longint'($urandom_range(int'(DramSize) - 4096));
-      int id = $urandom_range(3);
+      automatic int size = $urandom_range(4);
+      automatic int len = $urandom_range(7);
+      automatic longint nbytes = 64'(1) << size;
+      automatic longint addr = DramBase + longint'($urandom_range(int'(DramSize) - 4096));
+      automatic int id = $urandom_range(3);
       // keep the burst inside a 4KB page
       if (((addr & ~(nbytes - 1)) + (longint'(len) + 1) * nbytes - 1) >> 12 != addr >> 12)
         addr = addr & ~longint'(4095);
