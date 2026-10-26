@@ -3,7 +3,7 @@
 
 /* verilator lint_off UNUSEDSIGNAL */
 module overisc_core_top
-  import overisc_cfg_pkg::*, overisc_axi_pkg::*, overisc_commit_pkg::*;
+  import overisc_cfg_pkg::*, overisc_axi_pkg::*, overisc_commit_pkg::*, overisc_pipe_pkg::*;
 #(
     parameter logic [XLEN-1:0] RESET_VECTOR = '0
 ) (
@@ -79,6 +79,19 @@ module overisc_core_top
       pc <= RESET_VECTOR;
       ibus_arvalid <= 1'b1;
       ibus_rready <= '0;
+    end
+  end
+
+  overisc_pipe_if #(.DATA_W($bits(pcgen_source_t))) pcgen_source ();
+
+  overisc_pcgen #(.RESET_VECTOR(RESET_VECTOR)) i_pcgen (.*);
+
+  // TODO: Remove this block once implementation completed.
+  always_comb begin
+    pcgen_source.ready = 1'b1;
+    if (0) begin
+      $write("data=%d valid=%d ready=%d\n", pcgen_source.data, pcgen_source.valid,
+             pcgen_source.ready);
     end
   end
 
