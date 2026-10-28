@@ -14,7 +14,7 @@ module overisc_pcgen
 );
 
   logic [XLEN-1:0] pc, pc_w;
-  logic [INST_ID_W:0] id, id_w;
+  logic [INST_ID_W-1:0] id, id_w;
 
   pcgen_source_t source_data;
 
