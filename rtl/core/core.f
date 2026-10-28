@@ -8,12 +8,13 @@
 overisc_cfg_pkg.sv
 overisc_mem_pkg.sv
 overisc_commit_pkg.sv
-overisc_pipe_pkg.sv
 overisc_trace_pkg.sv
+overisc_pipe_pkg.sv
 
 // interface
 overisc_pipe_if.sv
 
 // module
 overisc_pcgen.sv
+overisc_ifu.sv
 overisc_core_top.sv

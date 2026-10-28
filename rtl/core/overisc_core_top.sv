@@ -26,72 +26,34 @@ module overisc_core_top
     output commit_t [NRET-1:0] commit
 );
 
-  logic [XLEN-1:0] pc, pc_w;
-
-  // ibus
-  logic ibus_arvalid, ibus_arvalid_w;
-  logic ibus_rready, ibus_rready_w;
-
   always_comb begin
     // setup
-    pc_w = pc;
-    ibus_arvalid_w = ibus_arvalid;
-    ibus_rready_w = ibus_rready;
+
 
     // logic
-    if (ibus_arvalid) begin
-      if (ibus_resp.ar_ready) begin
-        ibus_arvalid_w = '0;
-        ibus_rready_w  = 1'b1;
-      end
-    end
-    if (ibus_rready) begin
-      if (ibus_resp.r_valid) begin
-        ibus_rready_w = '0;
-        ibus_arvalid_w = 1'b1;
-        pc_w = pc + 'd4;
-      end
-    end
+
 
     // output
-    ibus_req = '{
-        default: '0,
-        ar: '{
-            default: '0,
-            addr: axi_addr_t'(pc),
-            burst: AXI_BURST_INCR,  // correct?
-            size: 2  // correct?
-        },
-        ar_valid : !rst && ibus_arvalid,
-        r_ready: ibus_rready
-    };
     dbus_req = '{default: '0};
-    io_req = '{default: '0};
-    commit = '{default: '0};
-  end
-
-  always_ff @(posedge clk) begin
-    pc <= pc_w;
-    ibus_arvalid <= ibus_arvalid_w;
-    ibus_rready <= ibus_rready_w;
-
-    if (rst) begin
-      pc <= RESET_VECTOR;
-      ibus_arvalid <= 1'b1;
-      ibus_rready <= '0;
-    end
+    io_req   = '{default: '0};
+    commit   = '{default: '0};
   end
 
   overisc_pipe_if #(.DATA_W($bits(pcgen_source_t))) pcgen_source ();
+  overisc_pipe_if #(.DATA_W($bits(ifu_source_t))) ifu_source ();
 
   overisc_pcgen #(.RESET_VECTOR(RESET_VECTOR)) i_pcgen (.*);
 
+  overisc_ifu #() i_ifu (
+      .ifu_sink(pcgen_source),
+      .*
+  );
+
   // TODO: Remove this block once implementation completed.
   always_comb begin
-    pcgen_source.ready = 1'b1;
+    ifu_source.ready = 1'b1;
     if (0) begin
-      $write("data=%d valid=%d ready=%d\n", pcgen_source.data, pcgen_source.valid,
-             pcgen_source.ready);
+      $write("data=%d valid=%d ready=%d\n", ifu_source.data, ifu_source.valid, ifu_source.ready);
     end
   end
 
