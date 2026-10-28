@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CERN-OHL-P-2.0
 // PC generator module of Overisc core.
 module overisc_pcgen
-  import overisc_cfg_pkg::*, overisc_pipe_pkg::*;
+  import overisc_cfg_pkg::*, overisc_pipe_pkg::*, overisc_trace_pkg::trace_id_t;
 #(
     parameter logic [XLEN-1:0] RESET_VECTOR = '0
 ) (
@@ -14,7 +14,7 @@ module overisc_pcgen
 );
 
   logic [XLEN-1:0] pc, pc_w;
-  logic [INST_ID_W-1:0] id, id_w;
+  trace_id_t id, id_w;
 
   pcgen_source_t source_data;
 

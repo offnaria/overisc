@@ -8,8 +8,6 @@ package overisc_cfg_pkg;
   // addresses outside the range raise an access fault via PMA.
   localparam int PADDR_W = 56;
 
-  localparam int INST_ID_W = 64;
-
   typedef enum logic [1:0] {
     PRIV_U = 2'b00,
     PRIV_S = 2'b01,
