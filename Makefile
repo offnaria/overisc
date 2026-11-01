@@ -73,7 +73,10 @@ CTEST_ARGS ?=
 .PHONY: sim
 sim: riscv-tests
 	cmake -S $(ROOT)/sim -B $(SIM_BUILD) -DRVTESTS_DIR=$(RVTESTS_BUILD) -DRISCV_PREFIX=$(RISCV_PREFIX) > /dev/null
-	cmake --build $(SIM_BUILD) -j
+	@# verilate() fixes the list of generated C++ files at configure time. When an RTL change
+	@# changes that list (Verilator names files by a hash of their contents), the first build
+	@# links the old list and fails, and CMake reconfigures; the second build then succeeds.
+	cmake --build $(SIM_BUILD) -j || cmake --build $(SIM_BUILD) -j
 	@ln -sf $(SIM_BUILD)/compile_commands.json $(ROOT)/compile_commands.json
 
 .PHONY: test

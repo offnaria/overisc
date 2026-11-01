@@ -19,7 +19,7 @@ set(OVERISC_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
 set(RVTESTS_DIR ${OVERISC_ROOT}/build/riscv-tests CACHE PATH "riscv-tests build directory")
 set(RISCV_PREFIX "riscv64-linux-" CACHE STRING "RISC-V toolchain prefix (may include a path)")
 set(SPIKE_HOME ${OVERISC_ROOT}/build/spike/install CACHE PATH "Spike install directory (make spike)")
-option(OVERISC_KONATA "Hook the Kanata logger to the core (needs the core's trace signal)" OFF)
+option(OVERISC_KONATA "Hook the Kanata logger to the core (needs the core's trace signal)" ON)
 
 find_package(verilator REQUIRED HINTS $ENV{VERILATOR_ROOT})
 add_subdirectory(${OVERISC_ROOT}/third_party/Catch2 catch2 EXCLUDE_FROM_ALL)
@@ -110,6 +110,20 @@ verilate(test_konata_glue
     ${OVERISC_ROOT}/rtl/core/overisc_cfg_pkg.sv ${OVERISC_ROOT}/rtl/core/overisc_commit_pkg.sv
     ${TRACE_PKG} ${CMAKE_CURRENT_SOURCE_DIR}/trace/overisc_sim_konata.sv)
 catch_discover_tests(test_konata_glue PROPERTIES LABELS "verilator")
+
+# Pipeline buffers in rtl/common (overisc_reg_slice, overisc_skid_buffer).
+set(PIPE_IF ${OVERISC_ROOT}/rtl/core/overisc_pipe_if.sv)
+add_executable(test_pipe_buf tests/pipe/test_pipe_buf.cc)
+target_link_libraries(test_pipe_buf PRIVATE overisc_sim Catch2::Catch2WithMain)
+foreach(kind_name IN ITEMS "0;reg_slice" "1;skid_buffer")
+  list(GET kind_name 0 kind)
+  list(GET kind_name 1 name)
+  verilate(test_pipe_buf
+    PREFIX Vtb_${name} TOP_MODULE tb_pipe_buf
+    SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tests/pipe/tb_pipe_buf.sv
+    VERILATOR_ARGS ${VERILATOR_WARN} ${PIPE_IF} -F ${COMMON_F} -GKIND=${kind})
+endforeach()
+catch_discover_tests(test_pipe_buf PROPERTIES LABELS "verilator")
 
 # ---- core (B4) ----
 # One CTest per riscv-test x seed x memory profile, labeled "riscv-tests".
