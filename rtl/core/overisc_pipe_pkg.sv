@@ -11,7 +11,7 @@ package overisc_pipe_pkg;
   } pcgen_source_t;
 
   typedef struct packed {
-    logic [XLEN-1:0] inst;
+    logic [ILEN-1:0] inst;
     // TODO: Add exception information.
 
     // from pcgen
