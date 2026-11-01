@@ -25,7 +25,7 @@ module overisc_reg_slice #(
     //       Be careful to use this module at the top interface.
     sink_ready = !source_valid || source.ready;
     if (sink_ready) begin
-      source_data_w  = source.data;  // No need to check sink.valid here.
+      source_data_w  = sink.data;  // No need to check sink.valid here.
       source_valid_w = sink.valid;
     end
 

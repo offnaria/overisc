@@ -31,12 +31,12 @@ module overisc_skid_buffer #(
     sink_ready_w = sink_ready;
 
     // logic
-    skid_ready = !source_valid || sink.ready;
+    skid_ready = !source_valid || source.ready;
     sink_hs = sink_ready && sink.valid;  // sink_ready==1 should be checked for safety after reset.
 
     if (skid_ready) begin
-      source_data_w  = (sk_valid) ? sk_data : sink.data;
-      source_valid_w = sk_valid || sink_hs;
+      source_data_w  = (skid_valid) ? skid_data : sink.data;
+      source_valid_w = skid_valid || sink_hs;
     end
 
     if (!skid_valid) begin
@@ -44,7 +44,7 @@ module overisc_skid_buffer #(
       skid_valid_w = sink_hs && !skid_ready;
     end else begin
       // sink_ready==0
-      skid_valid_w = !sink.ready;
+      skid_valid_w = !source.ready;
     end
 
     sink_ready_w = !skid_valid_w;
