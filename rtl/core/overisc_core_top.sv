@@ -61,7 +61,7 @@ module overisc_core_top
                 default: '0
             }
         },
-        f0_pc: i_pcgen.pc
+        f0_pc: pcgen_source.data[$bits(pcgen_source_t)-1-:XLEN]
     };
 
     // output
