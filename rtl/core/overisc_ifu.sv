@@ -31,7 +31,7 @@ module overisc_ifu
   axi_data_t ibus_rdata, ibus_rdata_w;
 
   // pipe
-  pcgen_source_t sink_data;
+  pcgen_source_t sink_data, sink_data_w;
   logic sink_ready, sink_ready_w;
 
   ifu_source_t source_data;
@@ -45,17 +45,18 @@ module overisc_ifu
     ibus_rready_w = ibus_rready;
     ibus_rdata_w = ibus_rdata;
     sink_ready_w = sink_ready;
+    sink_data_w = sink_data;
 
     // logic
-    sink_data = pcgen_source_t'(ifu_sink.data);
     source_valid = '0;
     // TODO: Add cache interface.
     // TODO: Add address translation logic.
     case (state)
       IDLE: begin
+        sink_data_w   = pcgen_source_t'(ifu_sink.data);
+        ibus_araddr_w = axi_addr_t'(sink_data_w.pc);
         if (sink_ready && ifu_sink.valid) begin
           ibus_arvalid_w = 1'b1;
-          ibus_araddr_w = axi_addr_t'(sink_data.pc);
           ibus_rready_w = 1'b1;
           state_w = FETCH;
         end
@@ -78,7 +79,7 @@ module overisc_ifu
       default: ;
     endcase
     source_data = '{
-        inst: ibus_rdata_w[XLEN*sink_data.pc[3:2]+:XLEN],  // TODO: Support C-extension.
+        inst: ibus_rdata_w[ILEN*sink_data.pc[3:2]+:ILEN],  // TODO: Support C-extension.
         pc: sink_data.pc,
         untaken_pc: sink_data.untaken_pc,
         id: sink_data.id
@@ -108,6 +109,7 @@ module overisc_ifu
     ibus_araddr <= ibus_araddr_w;
     ibus_rready <= ibus_rready_w;
     ibus_rdata <= ibus_rdata_w;
+    sink_data <= sink_data_w;
     sink_ready <= sink_ready_w;
 
     if (rst) begin
