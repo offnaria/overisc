@@ -109,7 +109,7 @@ riscv-tests はパイプラインのハザードやストール/フラッシュ�
 
 | ID | 内容 | 担当 | 依存 |
 |---|---|---|---|
-| F1 | GitHub Actions: Verilator lint + ビルド + テスト + Spike 比較（ツールチェーン・Spike・Verilator はキャッシュ） | C | B7, T5 |
+| F1 | ✅（手元で同じ手順を確認済み、GitHub 上では未実行）GitHub Actions: Verilator lint + ビルド + テスト + Spike 比較（ツールチェーン・Spike・Verilator はキャッシュ） | C | B7, T5 |
 | F2 | OOC 合成用 Tcl（xc7a100t-1、コア単体、配置配線まで、Fmax の求め方を決める）。確定命令の記録の出力ポートの扱い（パラメータで切る / OOC 用ラッパーで終端）を決める | C | C9 |
 | F3 | 合成結果の記録の置き場所と形式（コミットハッシュ、Fmax、LUT、FF、DSP、BRAM、クリティカルパス） | C | F2 |
 | F4 | 初回の合成とクリティカルパスのレビュー | U/C | F2, CP5 |
