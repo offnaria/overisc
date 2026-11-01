@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: Apache-2.0
+# CI (F1): lint, format check, build of all simulators, and the tests.
+#
+# The riscv-tests regression on the core runs in a separate job that does not fail the
+# workflow until the core can pass it (M0); its results are uploaded as an artifact.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  TOOLS: ${{ github.workspace }}/.ci-tools
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential autoconf flex bison help2man perl python3 \
+            libfl-dev zlib1g-dev device-tree-compiler cmake
+
+      - name: Tool versions for cache keys
+        id: keys
+        run: |
+          echo "verilator=$(sed -n 's/^VERSION=//p' sw/scripts/ci/install-verilator.sh)" >> "$GITHUB_OUTPUT"
+          echo "verible=$(sed -n 's/^VERSION=//p' sw/scripts/ci/install-verible.sh)" >> "$GITHUB_OUTPUT"
+          echo "spike=$(git -C third_party/riscv-isa-sim rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Verilator
+        id: cache-verilator
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TOOLS }}/verilator
+          key: verilator-${{ steps.keys.outputs.verilator }}-ubuntu-24.04
+
+      - name: Cache Verible
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TOOLS }}/verible
+          key: verible-${{ steps.keys.outputs.verible }}
+
+      - name: Cache RISC-V toolchain
+        uses: actions/cache@v4
+        with:
+          path: .tools
+          key: toolchain-${{ hashFiles('sw/scripts/get-toolchain.sh') }}
+
+      - name: Cache Spike
+        uses: actions/cache@v4
+        with:
+          path: build/spike
+          key: spike-${{ steps.keys.outputs.spike }}-ubuntu-24.04
+
+      - name: Install Verilator and Verible
+        run: |
+          sw/scripts/ci/install-verilator.sh "$TOOLS/verilator"
+          sw/scripts/ci/install-verible.sh "$TOOLS/verible"
+          echo "$TOOLS/verilator/bin" >> "$GITHUB_PATH"
+          echo "$TOOLS/verible/bin" >> "$GITHUB_PATH"
+          echo "VERILATOR_ROOT=$TOOLS/verilator/share/verilator" >> "$GITHUB_ENV"
+
+      - name: RISC-V toolchain
+        run: make toolchain
+
+      - name: Spike
+        run: make spike -j"$(nproc)"
+
+      - name: Lint
+        run: make lint
+
+      - name: Format check
+        run: make format-check
+
+      - name: Build simulators and tests
+        run: make sim
+
+      - name: Tests (except the core regression)
+        run: ctest --test-dir build/sim -j"$(nproc)" --output-on-failure -LE riscv-tests
+
+      - name: riscv-tests regression on the core (informational until M0)
+        id: regression
+        continue-on-error: true
+        run: ctest --test-dir build/sim -j"$(nproc)" -L riscv-tests --output-junit regression.xml
+
+      - name: Regression summary
+        if: always()
+        run: |
+          f=build/sim/regression.xml
+          [ -f "$f" ] && python3 -c 'import sys, xml.etree.ElementTree as E; r = E.parse(sys.argv[1]).getroot(); print("riscv-tests:", r.get("tests"), "tests,", r.get("failures"), "failed")' "$f" || true
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            build/sim/Testing/Temporary/LastTest*.log
+            build/sim/regression.xml
+          if-no-files-found: ignore
