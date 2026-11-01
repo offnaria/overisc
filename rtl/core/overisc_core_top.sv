@@ -3,7 +3,7 @@
 
 /* verilator lint_off UNUSEDSIGNAL */
 module overisc_core_top
-  import overisc_cfg_pkg::*, overisc_axi_pkg::*, overisc_commit_pkg::*, overisc_pipe_pkg::*;
+  import overisc_cfg_pkg::*, overisc_axi_pkg::*, overisc_commit_pkg::*, overisc_pipe_pkg::*, overisc_trace_pkg::*;
 #(
     parameter logic [XLEN-1:0] RESET_VECTOR = '0
 ) (
@@ -26,28 +26,49 @@ module overisc_core_top
     output commit_t [NRET-1:0] commit
 );
 
-  always_comb begin
-    // setup
-
-
-    // logic
-
-
-    // output
-    dbus_req = '{default: '0};
-    io_req   = '{default: '0};
-    commit   = '{default: '0};
-  end
-
+  // internal interface
   overisc_pipe_if #(.DATA_W($bits(pcgen_source_t))) pcgen_source ();
   overisc_pipe_if #(.DATA_W($bits(ifu_source_t))) ifu_source ();
 
+  // debug
+  trace_t trace;
+
+  // instances
   overisc_pcgen #(.RESET_VECTOR(RESET_VECTOR)) i_pcgen (.*);
 
   overisc_ifu #() i_ifu (
       .ifu_sink(pcgen_source),
       .*
   );
+
+  always_comb begin
+    // setup
+
+
+    // logic
+    trace = '{
+        default: '0,
+        f : '{
+            default: '0,
+            0: '{  // F0
+                valid: pcgen_source.valid,
+                id: pcgen_source.data[TRACE_ID_W-1:0]
+            },
+            1: '{  // F1
+                default: '0
+            },
+            2: '{  // F2
+                default: '0
+            }
+        },
+        f0_pc: i_pcgen.pc
+    };
+
+    // output
+    dbus_req = '{default: '0};
+    io_req = '{default: '0};
+    commit = '{default: '0};
+  end
 
   // TODO: Remove this block once implementation completed.
   always_comb begin
