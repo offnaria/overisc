@@ -54,6 +54,7 @@ jobs:
           key: toolchain-${{ hashFiles('sw/scripts/get-toolchain.sh') }}
 
       - name: Cache Spike
+        id: cache-spike
         uses: actions/cache@v4
         with:
           path: build/spike
@@ -70,7 +71,10 @@ jobs:
       - name: RISC-V toolchain
         run: make toolchain
 
+      # On a cache hit the checkout is newer than the restored objects, so make would rebuild
+      # Spike from scratch; the cache key already pins the submodule commit.
       - name: Spike
+        if: steps.cache-spike.outputs.cache-hit != 'true'
         run: make spike -j"$(nproc)"
 
       - name: Lint
