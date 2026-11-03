@@ -8,6 +8,7 @@
 #   make format       SystemVerilog を Verible で整形（既定の設定）
 #   make sim          シミュレーションと試験をビルド（build/sim、CMake）
 #   make test         全試験を CTest で並列実行（例: make test CTEST_ARGS="-L unit"）
+#   make run ELF=...  1 本をコアで実行（Konata 用ログを出す。下の run の説明を参照）
 #   make format-check 整形済みかどうかだけ確認（CI 用）
 #   make clean        build/ を削除（.tools/ は残す）
 
@@ -83,6 +84,24 @@ sim: riscv-tests
 .PHONY: test
 test: sim
 	ctest --test-dir $(SIM_BUILD) -j $$(nproc) --output-on-failure $(CTEST_ARGS)
+
+# ---- 1 本だけ実行 ----
+# make run ELF=<path> [SEED=1] [PROFILE=fast] [MAX_CYCLES=1000000] [KONATA=1] [FST=<file>]
+#   KONATA=1 で build/sim/konata/<名前>_<プロファイル>_s<シード>.log に Konata 用ログを出す。
+#   Linux のような長いプログラムでは KONATA=0 にする。
+SEED       ?= 1
+PROFILE    ?= fast
+MAX_CYCLES ?= 1000000
+KONATA     ?= 1
+FST        ?=
+RUN_KONATA  = $(SIM_BUILD)/konata/$(notdir $(ELF))_$(PROFILE)_s$(SEED).log
+
+.PHONY: run
+run: sim
+	@test -n "$(ELF)" || { echo "usage: make run ELF=<path> [SEED=] [PROFILE=] [KONATA=0|1] [FST=]"; exit 2; }
+	$(SIM_BUILD)/test_core --elf $(ELF) --seed $(SEED) --profile $(PROFILE) \
+	    --max-cycles $(MAX_CYCLES) $(if $(filter 1,$(KONATA)),--konata $(RUN_KONATA)) \
+	    $(if $(FST),--fst $(FST))
 
 # ---- format ----
 VERIBLE_FORMAT ?= verible-verilog-format

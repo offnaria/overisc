@@ -62,10 +62,11 @@ make riscv-tests   # M0 用テストを build/riscv-tests にビルド（実行�
 make lint          # コアの Verilator lint（-Wall、警告ゼロ）
 make format        # SystemVerilog を Verible で整形（既定の設定）
 make sim           # シミュレーションと試験をビルド（CMake、build/sim）
-make test          # 全試験を CTest で並列実行（例: make test CTEST_ARGS="-L unit"）
-build/sim/test_core --elf <ELF> [--seed N] [--profile fast|small|large|random] [--fst out.fst]
-                   # 1 本だけ実行（波形は --fst か環境変数 OVERISC_FST）
-                   # Konata 用ログは既定で build/sim/konata/ に出る（--konata <file> で変更、--no-konata で無効）
+make test          # 全試験を CTest で並列実行（例: make test CTEST_ARGS="-L unit"）。Konata 用ログは build/sim/konata/
+make run ELF=<ELF> [SEED=N] [PROFILE=fast|small|large|random] [KONATA=0|1] [FST=out.fst]
+                   # 1 本だけ実行。Konata 用ログは既定で build/sim/konata/ に出る（長いプログラムでは KONATA=0）
+build/sim/test_core --elf <ELF> [...] [--konata <file>] [--fst <file>]
+                   # 直接実行（指定したものだけ出力。波形は環境変数 OVERISC_FST でも可）
 ```
 
 ## ファイルリストの規則

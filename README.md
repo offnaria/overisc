@@ -66,6 +66,16 @@ Rebuild after changing RTL with `make sim` (or `cmake --build build/sim -j`).
 
 ## Running one program on the core
 
+`make run` builds what is needed and runs one program, writing a Konata log by default:
+
+```sh
+make run ELF=build/riscv-tests/rv64ui-p-add                      # Konata log on
+make run ELF=build/riscv-tests/rv64ui-p-add SEED=3 PROFILE=large FST=add.fst
+make run ELF=<long program> KONATA=0 MAX_CYCLES=100000000        # e.g. Linux: no Konata log
+```
+
+Or call the simulator directly (nothing is written unless asked):
+
 ```sh
 build/sim/test_core --elf build/riscv-tests/rv64ui-p-add
 build/sim/test_core --elf build/riscv-tests/rv64ui-p-add --seed 3 --profile large \
@@ -80,8 +90,7 @@ gtkwave add.fst
 | `--profile <name>` | fast | memory timing: `fast` (always ready, in order), `small`, `large` (long latency, reordering, interleaving), `random` (parameters drawn from the seed) |
 | `--max-cycles <n>` | 1000000 | cycle limit after reset |
 | `--fst <file>` | | write an FST waveform (also `OVERISC_FST=<file>` in the environment) |
-| `--konata <file>` | `build/sim/konata/<program>_<profile>_s<seed>.log` | pipeline log for [Konata](https://github.com/shioyadan/Konata) (see below) |
-| `--no-konata` | | do not write the Konata log (for long runs such as Linux) |
+| `--konata <file>` | | write a pipeline log for [Konata](https://github.com/shioyadan/Konata) (see below) |
 
 The result line is one of:
 
@@ -97,16 +106,17 @@ Disassembly of each test is next to the ELF: `build/riscv-tests/<program>.dump`.
 ### Pipeline view with Konata
 
 The core exposes an internal `trace` signal (`rtl/core/overisc_trace_pkg.sv`); the testbench turns
-it into a Kanata log. Every `test_core` run writes one by default, also in the CTest regression:
+it into a Kanata log when `test_core` gets `--konata <file>`. The callers turn it on by default:
 
-```sh
-build/sim/test_core --elf build/riscv-tests/rv64ui-p-add   # -> build/sim/konata/rv64ui-p-add_fast_s1.log
-```
+| Caller | Log |
+|---|---|
+| `make run ELF=...` | `build/sim/konata/<program>_<profile>_s<seed>.log` (`KONATA=0` to skip) |
+| CTest regression | same path per test (CMake option `OVERISC_KONATA_REGRESSION=OFF` to skip; CI skips) |
 
-The file of a test is overwritten by its next run. A run that reaches the cycle limit writes about
-30 MB per million cycles, so use `--no-konata` for long programs. CMake options:
-`OVERISC_KONATA=OFF` removes the hook, `OVERISC_KONATA_REGRESSION=OFF` turns the logs off in the
-regression only (CI does this; pass it with `make sim CMAKE_ARGS=-DOVERISC_KONATA_REGRESSION=OFF`).
+A file is overwritten by the next run of the same test. A run that reaches the cycle limit writes
+about 30 MB per million cycles, so skip the log for long programs such as Linux. The CMake option
+`OVERISC_KONATA=OFF` removes the hook altogether. CMake options can be passed through
+`make sim CMAKE_ARGS=...`.
 
 Open the log in Konata. Stages are `F0 F1 F2 FB D X M W`; instruction labels use Spike's
 disassembler when Spike is built (`make spike`). Fetch blocks flushed before any of their

@@ -3,13 +3,10 @@
 // CTest registers one run per riscv-test x seed x memory profile (sim/CMakeLists.txt).
 //
 // usage: test_core --elf <path> [--seed <n>] [--profile <name>] [--max-cycles <n>]
-//                  [--fst <file>] [--konata <file> | --no-konata] [Catch2 options]
+//                  [--fst <file>] [--konata <file>] [Catch2 options]
 // The waveform can also be requested with the OVERISC_FST environment variable.
-//
-// A Kanata log (Konata viewer) is written by default to
-//   <build>/konata/<program>_<profile>_s<seed>.log
-// (overwritten by the next run of the same test). Use --no-konata for long runs such as
-// Linux. Needs the build option OVERISC_KONATA (on by default).
+// --konata writes a Kanata log (Konata viewer); whether to write one is up to the caller
+// (`make run`, the CTest regression). Needs the build option OVERISC_KONATA (on by default).
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cinttypes>
@@ -28,14 +25,7 @@ struct Args {
   uint64_t max_cycles = 1'000'000;
   std::string fst;
   std::string konata;
-  bool no_konata = false;
 } g_args;
-
-std::string default_konata_path() {
-  const std::string name = std::filesystem::path(g_args.elf).filename().string();
-  return std::string(OVERISC_KONATA_DIR) + "/" + name + "_" + g_args.profile + "_s" +
-         std::to_string(g_args.seed) + ".log";
-}
 
 }  // namespace
 
@@ -53,11 +43,10 @@ TEST_CASE("program passes on the core", "[core]") {
   };
   opt.max_cycles = g_args.max_cycles + 1000;  // the host enforces the real limit
   opt.fst = g_args.fst.empty() ? fst_from_env() : g_args.fst;
-  if (!g_args.no_konata) {
-    const std::string path = g_args.konata.empty() ? default_konata_path() : g_args.konata;
-    const auto dir = std::filesystem::path(path).parent_path();
+  if (!g_args.konata.empty()) {
+    const auto dir = std::filesystem::path(g_args.konata).parent_path();
     if (!dir.empty()) std::filesystem::create_directories(dir);
-    opt.plusargs.push_back("+konata=" + path);
+    opt.plusargs.push_back("+konata=" + g_args.konata);
   }
 
   const SimResult r = run_clocked<Vtb_core>(opt);
@@ -76,8 +65,7 @@ int main(int argc, char* argv[]) {
              Opt(g_args.profile, "name")["--profile"]("memory timing: fast|small|large|random") |
              Opt(g_args.max_cycles, "n")["--max-cycles"]("cycle limit") |
              Opt(g_args.fst, "file")["--fst"]("write an FST waveform") |
-             Opt(g_args.konata, "file")["--konata"]("Kanata log path (default: <build>/konata/...)") |
-             Opt(g_args.no_konata)["--no-konata"]("do not write a Kanata log");
+             Opt(g_args.konata, "file")["--konata"]("write a Kanata log (Konata viewer)");
   session.cli(cli);
   if (const int rc = session.applyCommandLine(argc, argv); rc != 0) return rc;
   return session.run();

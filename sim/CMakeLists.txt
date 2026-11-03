@@ -140,12 +140,6 @@ endif()
 
 add_executable(test_core tests/core/test_core.cc)
 target_link_libraries(test_core PRIVATE overisc_sim Catch2::Catch2)
-target_compile_definitions(test_core PRIVATE OVERISC_KONATA_DIR="${CMAKE_BINARY_DIR}/konata")
-if(OVERISC_KONATA AND OVERISC_KONATA_REGRESSION)
-  set(REGRESSION_KONATA_ARGS)
-else()
-  set(REGRESSION_KONATA_ARGS --no-konata)
-endif()
 verilate(test_core
   PREFIX Vtb_core TOP_MODULE tb_core TRACE_FST
   SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tb/tb_core.sv
@@ -161,9 +155,15 @@ if(EXISTS ${M0_LIST})
   foreach(profile IN LISTS REGRESSION_PROFILES)
     foreach(seed IN LISTS REGRESSION_SEEDS)
       foreach(t IN LISTS M0_TESTS)
+        # Kanata log per test, overwritten by the next run of the same test
+        if(OVERISC_KONATA AND OVERISC_KONATA_REGRESSION)
+          set(konata --konata ${CMAKE_BINARY_DIR}/konata/${t}_${profile}_s${seed}.log)
+        else()
+          set(konata)
+        endif()
         add_test(NAME "riscv-tests/${profile}/${seed}/${t}"
           COMMAND test_core --elf ${RVTESTS_DIR}/${t} --seed ${seed} --profile ${profile}
-            ${REGRESSION_KONATA_ARGS})
+            ${konata})
         set_tests_properties("riscv-tests/${profile}/${seed}/${t}" PROPERTIES
           LABELS "riscv-tests;core")
       endforeach()
