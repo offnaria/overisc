@@ -68,11 +68,12 @@ lint:
 # ---- シミュレーションと試験（CMake + CTest + Catch2、D-37） ----
 SIM_BUILD := $(BUILD)/sim
 CTEST_ARGS ?=
+CMAKE_ARGS ?=
 
 # riscv-tests の一覧（m0.list）を configure 時に読むので、先にビルドしておく
 .PHONY: sim
 sim: riscv-tests
-	cmake -S $(ROOT)/sim -B $(SIM_BUILD) -DRVTESTS_DIR=$(RVTESTS_BUILD) -DRISCV_PREFIX=$(RISCV_PREFIX) > /dev/null
+	cmake -S $(ROOT)/sim -B $(SIM_BUILD) -DRVTESTS_DIR=$(RVTESTS_BUILD) -DRISCV_PREFIX=$(RISCV_PREFIX) $(CMAKE_ARGS) > /dev/null
 	@# verilate() fixes the list of generated C++ files at configure time. When an RTL change
 	@# changes that list (Verilator names files by a hash of their contents), the first build
 	@# links the old list and fails, and CMake reconfigures; the second build then succeeds.

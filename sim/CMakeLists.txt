@@ -20,6 +20,7 @@ set(RVTESTS_DIR ${OVERISC_ROOT}/build/riscv-tests CACHE PATH "riscv-tests build 
 set(RISCV_PREFIX "riscv64-linux-" CACHE STRING "RISC-V toolchain prefix (may include a path)")
 set(SPIKE_HOME ${OVERISC_ROOT}/build/spike/install CACHE PATH "Spike install directory (make spike)")
 option(OVERISC_KONATA "Hook the Kanata logger to the core (needs the core's trace signal)" ON)
+option(OVERISC_KONATA_REGRESSION "Write Kanata logs in the riscv-tests regression" ON)
 
 find_package(verilator REQUIRED HINTS $ENV{VERILATOR_ROOT})
 add_subdirectory(${OVERISC_ROOT}/third_party/Catch2 catch2 EXCLUDE_FROM_ALL)
@@ -139,6 +140,12 @@ endif()
 
 add_executable(test_core tests/core/test_core.cc)
 target_link_libraries(test_core PRIVATE overisc_sim Catch2::Catch2)
+target_compile_definitions(test_core PRIVATE OVERISC_KONATA_DIR="${CMAKE_BINARY_DIR}/konata")
+if(OVERISC_KONATA AND OVERISC_KONATA_REGRESSION)
+  set(REGRESSION_KONATA_ARGS)
+else()
+  set(REGRESSION_KONATA_ARGS --no-konata)
+endif()
 verilate(test_core
   PREFIX Vtb_core TOP_MODULE tb_core TRACE_FST
   SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tb/tb_core.sv
@@ -155,7 +162,8 @@ if(EXISTS ${M0_LIST})
     foreach(seed IN LISTS REGRESSION_SEEDS)
       foreach(t IN LISTS M0_TESTS)
         add_test(NAME "riscv-tests/${profile}/${seed}/${t}"
-          COMMAND test_core --elf ${RVTESTS_DIR}/${t} --seed ${seed} --profile ${profile})
+          COMMAND test_core --elf ${RVTESTS_DIR}/${t} --seed ${seed} --profile ${profile}
+            ${REGRESSION_KONATA_ARGS})
         set_tests_properties("riscv-tests/${profile}/${seed}/${t}" PROPERTIES
           LABELS "riscv-tests;core")
       endforeach()
