@@ -46,6 +46,7 @@ module overisc_pcgen
 
     if (rst) begin
       pc <= RESET_VECTOR;
+      id <= '0;  // to ease debug
     end
   end
 
