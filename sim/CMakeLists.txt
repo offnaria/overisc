@@ -73,7 +73,7 @@ target_include_directories(test_unit PRIVATE tests/konata)
 target_compile_definitions(test_unit PRIVATE
   RVTESTS_DIR="${RVTESTS_DIR}" RISCV_PREFIX="${RISCV_PREFIX}")
 target_compile_options(test_unit PRIVATE -Wall -Wextra)
-catch_discover_tests(test_unit PROPERTIES LABELS "unit")
+catch_discover_tests(test_unit PROPERTIES LABELS "unit" TIMEOUT 60)
 
 # ---- Verilated tests ----
 # The memory smoke test generates its own clock (timed model).

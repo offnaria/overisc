@@ -204,3 +204,33 @@ TEST_CASE("Kanata writer reports retire of an instruction not in flight", "[kona
   const Run r = run({s});
   CHECK(r.violations == 1);
 }
+
+TEST_CASE("Kanata writer stays fast with many blocks in flight", "[konata]") {
+  // a front end without D: blocks are never consumed, so they pile up until the end
+  // (quadratic work per cycle here once made a 1M-cycle run take forever)
+  std::ostringstream out, warn;
+  KonataTracer t(out, konata_label, &warn);
+  const uint32_t n = 200000;
+  for (uint32_t c = 0; c < n + 2; ++c) {
+    TraceSample s;
+    if (c < n) s.f[0] = {true, c};
+    if (c >= 1 && c - 1 < n) s.f[1] = {true, c - 1};
+    if (c >= 2 && c - 2 < n) s.f[2] = {true, c - 2};
+    s.f0_pc = 0x80000000 + 8 * c;
+    t.sample(c, s);
+  }
+  t.finish();
+  CHECK(t.violations() == 0);
+  CHECK(konata_test::parse(out.str()).insns.size() == n);
+}
+
+TEST_CASE("Kanata writer drops a new block that overtakes", "[konata]") {
+  // block 1 first reported in F1 while block 0 is in F0; then block 0 moves on normally
+  TraceSample c1;
+  c1.f[1] = {true, 1};
+  TraceSample c2 = fetch(1, 0);
+  const Run r = run({fetch(0, 0), c1, c2});
+  CHECK(r.violations == 1);
+  REQUIRE(r.log.insns.size() == 1);
+  CHECK(r.log.insns.at(0).sim_id == 0);
+}

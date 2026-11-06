@@ -2,6 +2,7 @@
 #include "konata_tracer.h"
 
 #include <algorithm>
+#include <iterator>
 #include <sstream>
 
 namespace {
@@ -76,11 +77,14 @@ void KonataTracer::block_report(uint64_t c, uint32_t fid, Stage st, const uint64
     return;
   }
   if (st == b.stage) return;  // repeated report
-  for (const auto& [ofid, ob] : blocks_) {
-    if (ofid >= fid) break;
+  // Older blocks are never in an earlier stage than younger ones (checked on every move), so
+  // the nearest older block is the only one that can be overtaken.
+  if (it != blocks_.begin()) {
+    const auto& [ofid, ob] = *std::prev(it);
     if (ob.stage < st) {
       violation(c, where + ": overtakes older block " + std::to_string(ofid) + " in " +
                        kStageName[ob.stage]);
+      if (b.stage == kNone) blocks_.erase(it);  // just created: keep the ordering invariant
       return;
     }
   }
@@ -105,8 +109,9 @@ void KonataTracer::insn_report(uint64_t c, uint32_t iid, Stage st) {
     return;
   }
   if (st == it->second.stage) return;  // repeated report
-  for (const auto& [oiid, oi] : insns_) {
-    if (oiid >= iid) break;
+  // as for blocks, only the nearest older instruction can be overtaken
+  if (it != insns_.begin()) {
+    const auto& [oiid, oi] = *std::prev(it);
     if (oi.stage < st) {
       violation(c, where + ": overtakes older instruction " + std::to_string(oiid) + " in " +
                        kStageName[oi.stage]);
@@ -219,8 +224,11 @@ void KonataTracer::sample(uint64_t c, const TraceSample& s) {
   }
 
   // ---- write what can no longer change ----
+  // Blocks are created in ID order, so the oldest live block started first; nothing earlier
+  // than its first stage can still be added.
   uint64_t safe = c;
-  for (const auto& [fid, b] : blocks_) {
+  if (!blocks_.empty()) {
+    const Block& b = blocks_.begin()->second;
     for (int k = 0; k < 4; ++k) {
       if (b.has[k]) safe = std::min(safe, b.start[k]);
     }
