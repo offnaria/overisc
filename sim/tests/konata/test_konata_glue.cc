@@ -43,14 +43,15 @@ Packer pack(const TraceSample& s) {
   Packer p;
   for (int k = TraceSample::kNumF - 1; k >= 0; --k) p.slot(s.f[k]);
   p.push(s.f0_pc, 64);
-  p.slot(s.fb_push);
-  p.push(s.fb_flush, 1);
+  p.slot(s.fb);
   p.slot(s.d);
   p.push(s.d_fid, 32);
   p.push(s.d_pc, 64);
   p.push(s.d_insn, 32);
   for (int k = TraceSample::kNumB - 1; k >= 0; --k) p.slot(s.b[k]);
   p.slot(s.retire.empty() ? TraceSlot{} : s.retire[0]);  // NRET = 1
+  p.push(s.redirect, 1);
+  p.push(static_cast<uint64_t>(s.redirect_stage), 3);
   return p;
 }
 
@@ -83,8 +84,8 @@ TEST_CASE("Kanata log through SV and DPI matches the direct writer", "[konata][v
     ctx->commandArgs(2, argv);
     ctx->quiet(true);
     Vtb_konata top{ctx.get()};
-    // $bits(trace_t): 3*33 + 64 + 33 + 1 + 33 + 32 + 64 + 32 + 3*33 + NRET*33 (NRET = 1)
-    REQUIRE(pack(TraceSample{}).size() == 490);
+    // $bits(trace_t): 3*33 + 64 + 33 + 33 + 32 + 64 + 32 + 3*33 + NRET*33 + 1 + 3 (NRET = 1)
+    REQUIRE(pack(TraceSample{}).size() == 493);
     auto edge = [&] {
       top.clk = 0;
       top.eval();

@@ -44,17 +44,14 @@ TEST_CASE("Kanata log has the expected stages", "[konata]") {
   const auto& i = log.insns;
 
   // I0: straight through; it never waits in the Fetch Buffer
-  CHECK(i.at(0).stages == Stages{{"F0", 0}, {"F1", 1}, {"F2", 2}, {"D", 3}, {"X", 4},
-                                 {"M", 5}, {"W", 6}});
+  CHECK(i.at(0).stages == Stages{{"F0", 0}, {"F1", 1}, {"F2", 2}, {"D", 3}, {"X", 4}, {"M", 5}, {"W", 6}});
   CHECK(i.at(0).retire_type == 0);
   CHECK(i.at(0).retire_cycle == 7);
   // I1: same block, waits one cycle in FB and one in X
-  CHECK(i.at(1).stages == Stages{{"F0", 0}, {"F1", 1}, {"F2", 2}, {"FB", 3}, {"D", 4},
-                                 {"X", 5}, {"M", 7}, {"W", 8}});
+  CHECK(i.at(1).stages == Stages{{"F0", 0}, {"F1", 1}, {"F2", 2}, {"FB", 3}, {"D", 4}, {"X", 5}, {"M", 7}, {"W", 8}});
   CHECK(i.at(1).retire_cycle == 9);
   // I2: the jump
-  CHECK(i.at(2).stages == Stages{{"F0", 1}, {"F1", 2}, {"F2", 3}, {"FB", 4}, {"D", 5},
-                                 {"X", 7}, {"M", 8}, {"W", 9}});
+  CHECK(i.at(2).stages == Stages{{"F0", 1}, {"F1", 2}, {"F2", 3}, {"FB", 4}, {"D", 5}, {"X", 7}, {"M", 8}, {"W", 9}});
   CHECK(i.at(2).retire_cycle == 10);
   // I3: flushed in D
   CHECK(i.at(3).stages == Stages{{"F0", 1}, {"F1", 2}, {"F2", 3}, {"FB", 4}, {"D", 7}});
@@ -70,8 +67,7 @@ TEST_CASE("Kanata log has the expected stages", "[konata]") {
   CHECK(i.at(5).retire_type == 1);
   CHECK(i.at(5).retire_cycle == 8);
   // I4: from the jump target
-  CHECK(i.at(6).stages == Stages{{"F0", 8}, {"F1", 9}, {"F2", 10}, {"D", 11}, {"X", 12},
-                                 {"M", 13}, {"W", 14}});
+  CHECK(i.at(6).stages == Stages{{"F0", 8}, {"F1", 9}, {"F2", 10}, {"D", 11}, {"X", 12}, {"M", 13}, {"W", 14}});
   CHECK(i.at(6).retire_cycle == 15);
   CHECK(i.at(6).sim_id == 4);
 }
@@ -95,13 +91,19 @@ TEST_CASE("Kanata writer handles an empty run", "[konata]") {
 
 namespace {
 
-// Runs samples and returns (log, violation count).
-std::pair<konata_test::ParsedLog, uint64_t> run(const std::vector<TraceSample>& v) {
+// Runs samples and returns (log text, parsed log, violation count).
+struct Run {
+  std::string text;
+  konata_test::ParsedLog log;
+  uint64_t violations;
+};
+
+Run run(const std::vector<TraceSample>& v) {
   std::ostringstream out, warn;
   KonataTracer t(out, konata_label, &warn);
   for (size_t c = 0; c < v.size(); ++c) t.sample(c, v[c]);
   t.finish();
-  return {konata_test::parse(out.str()), t.violations()};
+  return {out.str(), konata_test::parse(out.str()), t.violations()};
 }
 
 TraceSample fetch(int stage, uint32_t fid, uint64_t pc = 0x80000000) {
@@ -113,56 +115,92 @@ TraceSample fetch(int stage, uint32_t fid, uint64_t pc = 0x80000000) {
 
 }  // namespace
 
-TEST_CASE("Kanata writer reports handshake pulses instead of occupancy", "[konata]") {
-  // block 0: F0, F1 as a one-cycle pulse, nothing, then F2 (what the trace looked like when
-  // driven by handshakes); it must not reappear as a second entry
-  std::vector<TraceSample> v = {fetch(0, 0), fetch(1, 0), TraceSample{}, fetch(2, 0)};
-  const auto [log, n] = run(v);
-  CHECK(n == 1);
-  CHECK(log.errors.empty());
-  CHECK(log.insns.size() == 1);
+TEST_CASE("Kanata log is the same for level and pulse reports", "[konata]") {
+  const Run level = run(konata_test::scenario());
+  const Run pulse = run(konata_test::pulses());
+  CHECK(level.violations == 0);
+  CHECK(pulse.violations == 0);
+  CHECK(pulse.text == level.text);
 }
 
-TEST_CASE("Kanata writer reports blocks first seen after F0", "[konata]") {
-  const auto [log, n] = run({fetch(1, 5)});
-  CHECK(n == 1);
-  CHECK(log.insns.empty());
+TEST_CASE("Kanata log: a gap between stage reports does not flush", "[konata]") {
+  // block 0: F0, F1, nothing for a cycle, then F2 (handshake pulses with a wait in between)
+  const Run r = run({fetch(0, 0), fetch(1, 0), TraceSample{}, fetch(2, 0)});
+  CHECK(r.violations == 0);
+  CHECK(r.log.errors.empty());
+  REQUIRE(r.log.insns.size() == 1);
+  using Stages = std::vector<std::pair<std::string, uint64_t>>;
+  CHECK(r.log.insns.at(0).stages == Stages{{"F0", 0}, {"F1", 1}, {"F2", 3}});
+  CHECK(r.log.insns.at(0).label.rfind("80000000: fetch block", 0) == 0);
+}
+
+TEST_CASE("Kanata log: a redirect flushes only the stages before its source", "[konata]") {
+  TraceSample c1 = fetch(0, 1);
+  c1.f[1] = {true, 0};
+  c1.redirect = true;
+  c1.redirect_stage = 1;  // from F1: block 1 in F0 is flushed, block 0 in F1 stays
+  const Run r = run({fetch(0, 0), c1, fetch(2, 0)});
+  CHECK(r.violations == 0);
+  REQUIRE(r.log.insns.size() == 2);
+  // flushed blocks are written when flushed, block 0 when the log ends
+  CHECK(r.log.insns.at(0).sim_id == 1);
+  CHECK(r.log.insns.at(0).retire_cycle == 2);
+  CHECK(r.log.insns.at(1).sim_id == 0);
+  CHECK(r.log.insns.at(1).stages.back().first == "F2");
+}
+
+TEST_CASE("Kanata writer reports IDs reported after a flush", "[konata]") {
+  TraceSample c0 = fetch(0, 0);
+  c0.redirect = true;
+  c0.redirect_stage = 1;  // flushes block 0
+  const Run r = run({c0, fetch(1, 0)});
+  CHECK(r.violations == 1);
+  CHECK(r.log.insns.size() == 1);
 }
 
 TEST_CASE("Kanata writer reports blocks moving back", "[konata]") {
-  const auto [log, n] = run({fetch(0, 0), fetch(2, 0), fetch(1, 0)});
-  CHECK(n == 1);
-  REQUIRE(log.insns.size() == 1);
-  CHECK(log.errors.empty());
+  const Run r = run({fetch(0, 0), fetch(2, 0), fetch(1, 0)});
+  CHECK(r.violations == 1);
+  REQUIRE(r.log.insns.size() == 1);
+  CHECK(r.log.errors.empty());
 }
 
-TEST_CASE("Kanata writer reports an older block behind a younger one", "[konata]") {
-  TraceSample c1 = fetch(0, 1);  // block 1 in F0, block 0 in F1
-  c1.f[1] = {true, 0};
-  TraceSample c2;  // block 1 in F2, block 0 in F1: block 1 overtook block 0
-  c2.f[1] = {true, 0};
-  c2.f[2] = {true, 1};
-  const auto [log, n] = run({fetch(0, 0), c1, c2});
-  CHECK(n == 1);
-  CHECK(log.errors.empty());
-  CHECK(log.insns.size() == 2);
+TEST_CASE("Kanata writer reports a younger block overtaking an older one", "[konata]") {
+  TraceSample c1 = fetch(0, 1);  // block 1 in F0, block 0 still in F0
+  TraceSample c2 = fetch(1, 1);  // block 1 to F1 while block 0 is in F0
+  const Run r = run({fetch(0, 0), c1, c2});
+  CHECK(r.violations == 1);
+  CHECK(r.log.errors.empty());
 }
 
-TEST_CASE("Kanata writer reports instructions shown again after retiring", "[konata]") {
+TEST_CASE("Kanata writer reports block IDs out of order", "[konata]") {
+  const Run r = run({fetch(0, 5), fetch(0, 3)});
+  CHECK(r.violations == 1);
+  CHECK(r.log.insns.size() == 1);
+}
+
+TEST_CASE("Kanata writer reports instructions reported after retiring", "[konata]") {
   std::vector<TraceSample> v = konata_test::scenario();
   TraceSample again;
   again.b[2] = {true, 4};  // I4 retired at cycle 14
   v.push_back(again);
-  const auto [log, n] = run(v);
-  CHECK(n == 1);
-  CHECK(log.errors.empty());
-  CHECK(log.insns.size() == 7);
+  const Run r = run(v);
+  CHECK(r.violations == 1);
+  CHECK(r.log.errors.empty());
+  CHECK(r.log.insns.size() == 7);
 }
 
 TEST_CASE("Kanata writer reports instructions in X that never were in D", "[konata]") {
   TraceSample s;
   s.b[0] = {true, 9};
-  const auto [log, n] = run({s});
-  CHECK(n == 1);
-  CHECK(log.insns.empty());
+  const Run r = run({s});
+  CHECK(r.violations == 1);
+  CHECK(r.log.insns.empty());
+}
+
+TEST_CASE("Kanata writer reports retire of an instruction not in flight", "[konata]") {
+  TraceSample s;
+  s.retire.push_back({true, 3});
+  const Run r = run({s});
+  CHECK(r.violations == 1);
 }

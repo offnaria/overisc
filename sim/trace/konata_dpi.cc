@@ -41,12 +41,16 @@ void overisc_konata_fetch(int stage, unsigned char valid, int id) {
   state()->sample.f[stage] = {valid != 0, static_cast<uint32_t>(id)};
 }
 
-void overisc_konata_front(long long f0_pc, unsigned char fb_push_valid, int fb_push_id,
-                          unsigned char fb_flush) {
+void overisc_konata_front(long long f0_pc, unsigned char fb_valid, int fb_id) {
   TraceSample& s = state()->sample;
   s.f0_pc = static_cast<uint64_t>(f0_pc);
-  s.fb_push = {fb_push_valid != 0, static_cast<uint32_t>(fb_push_id)};
-  s.fb_flush = fb_flush != 0;
+  s.fb = {fb_valid != 0, static_cast<uint32_t>(fb_id)};
+}
+
+void overisc_konata_redirect(unsigned char valid, int stage) {
+  TraceSample& s = state()->sample;
+  s.redirect = valid != 0;
+  s.redirect_stage = stage;
 }
 
 void overisc_konata_decode(unsigned char valid, int id, int fid, long long pc, int insn) {

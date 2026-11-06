@@ -19,9 +19,12 @@ module overisc_sim_konata
   );
   import "DPI-C" function void overisc_konata_front(
     input longint f0_pc,
-    input bit     fb_push_valid,
-    input int     fb_push_id,
-    input bit     fb_flush
+    input bit     fb_valid,
+    input int     fb_id
+  );
+  import "DPI-C" function void overisc_konata_redirect(
+    input bit valid,
+    input int stage
   );
   import "DPI-C" function void overisc_konata_decode(
     input bit     valid,
@@ -64,8 +67,8 @@ module overisc_sim_konata
       for (int k = 0; k < TRACE_NF; k++) begin
         overisc_konata_fetch(k, trace.f[k].valid, int'(trace.f[k].id));
       end
-      overisc_konata_front(longint'(trace.f0_pc), trace.fb_push.valid, int'(trace.fb_push.id),
-                           trace.fb_flush);
+      overisc_konata_front(longint'(trace.f0_pc), trace.fb.valid, int'(trace.fb.id));
+      overisc_konata_redirect(trace.redirect, int'(trace.redirect_stage));
       overisc_konata_decode(trace.d.valid, int'(trace.d.id), int'(trace.d_fid),
                             longint'(trace.d_pc), int'(trace.d_insn));
       for (int k = 0; k < TRACE_NB; k++) begin

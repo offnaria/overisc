@@ -5,22 +5,25 @@
 // redirects at the end of cycle 7: I3 (D), B2 (Fetch Buffer) and B3 (F2) are flushed, and B4
 // is fetched from the target.
 //
-//  cycle  F0  F1  F2  push  D       X   M   W   retire
+// scenario() reports every item in every cycle it is in a stage (level). pulses() turns that
+// into reports of stage entries only; both must give the same log.
+//
+//  cycle  F0  F1  F2  FB      D       X   M   W   retire
 //    0    B0
 //    1    B1  B0
-//    2    B2  B1  B0  B0
-//    3    B3  B2  B1  B1    I0(B0)
-//    4        B3  B2  B2    I1(B0)  I0
-//    5            B3        I2(B1)  I1  I0
-//    6            B3        I2      I1      I0  I0
-//    7            B3        I3(B1)  I2  I1          (fb_flush)
-//    8    B4                            I2  I1  I1
-//    9        B4                            I2  I2
-//   10            B4  B4
-//   11                      I4(B4)
-//   12                              I4
-//   13                                  I4
-//   14                                      I4  I4
+//    2    B2  B1  B0
+//    3    B3  B2  B1  B0      I0(B0)
+//    4        B3  B2  B1      I1(B0)  I0
+//    5            B3  B2      I2(B1)  I1  I0
+//    6            B3  B2      I2      I1      I0  I0
+//    7            B3  B2      I3(B1)  I2  I1          redirect from X
+//    8    B4                              I2  I1  I1
+//    9        B4                              I2  I2
+//   10            B4
+//   11                B4      I4(B4)
+//   12                                I4
+//   13                                    I4
+//   14                                        I4  I4
 #pragma once
 
 #include <cstdint>
@@ -50,7 +53,8 @@ inline std::vector<TraceSample> scenario() {
     v[c].d_insn = insn[i];
   };
   auto b = [&](int c, int stage, uint32_t i) { v[c].b[stage] = {true, i}; };
-  auto push = [&](int c, uint32_t fid) { v[c].fb_push = {true, fid}; };
+  // the block written into the Fetch Buffer at the end of cycle c is in FB from c + 1
+  auto push = [&](int c, uint32_t fid) { v[c + 1].fb = {true, fid}; };
   auto retire = [&](int c, uint32_t i) { v[c].retire.push_back({true, i}); };
 
   f(0, 0, 0, 0x80000000);
@@ -60,7 +64,11 @@ inline std::vector<TraceSample> scenario() {
   f(4, 1, 3), f(4, 2, 2), push(4, 2), d(4, 1), b(4, 0, 0);
   f(5, 2, 3), d(5, 2), b(5, 0, 1), b(5, 1, 0);
   f(6, 2, 3), d(6, 2), b(6, 0, 1), b(6, 2, 0), retire(6, 0);
-  f(7, 2, 3), d(7, 3), b(7, 0, 2), b(7, 1, 1), v[7].fb_flush = true;
+  v[6].fb = {true, 2};  // B2 waits in the Fetch Buffer
+  v[7].fb = {true, 2};
+  f(7, 2, 3), d(7, 3), b(7, 0, 2), b(7, 1, 1);
+  v[7].redirect = true;
+  v[7].redirect_stage = 5;  // X
   f(8, 0, 4, 0x80000018), b(8, 1, 2), b(8, 2, 1), retire(8, 1);
   f(9, 1, 4), b(9, 2, 2), retire(9, 2);
   f(10, 2, 4), push(10, 4);
@@ -69,6 +77,27 @@ inline std::vector<TraceSample> scenario() {
   b(13, 1, 4);
   b(14, 2, 4), retire(14, 4);
   return v;
+}
+
+// The same scenario reported as stage entries only: a slot is kept only in the cycle its
+// content changed.
+inline std::vector<TraceSample> pulses() {
+  std::vector<TraceSample> v = scenario();
+  std::vector<TraceSample> out = v;
+  auto same = [](const TraceSlot& a, const TraceSlot& b) {
+    return a.valid && b.valid && a.id == b.id;
+  };
+  for (size_t c = 1; c < v.size(); ++c) {
+    for (int k = 0; k < TraceSample::kNumF; ++k) {
+      if (same(v[c].f[k], v[c - 1].f[k])) out[c].f[k] = {};
+    }
+    if (same(v[c].fb, v[c - 1].fb)) out[c].fb = {};
+    if (same(v[c].d, v[c - 1].d)) out[c].d = {};
+    for (int k = 0; k < TraceSample::kNumB; ++k) {
+      if (same(v[c].b[k], v[c - 1].b[k])) out[c].b[k] = {};
+    }
+  }
+  return out;
 }
 
 // Parsed log, per instruction ID in the file.
