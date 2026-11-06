@@ -23,6 +23,13 @@ std::string run_scenario() {
 }  // namespace
 
 TEST_CASE("Kanata log follows the format rules", "[konata]") {
+  std::ostringstream out, warn;
+  KonataTracer t(out, konata_label, &warn);
+  const auto v = konata_test::scenario();
+  for (size_t c = 0; c < v.size(); ++c) t.sample(c, v[c]);
+  t.finish();
+  CHECK(t.violations() == 0);
+  CHECK(warn.str().empty());
   const auto log = konata_test::parse(run_scenario());
   INFO(run_scenario());
   CHECK(log.errors.empty());
@@ -84,4 +91,78 @@ TEST_CASE("Kanata writer handles an empty run", "[konata]") {
   KonataTracer t(out, konata_label);
   t.finish();
   CHECK(out.str().empty());
+}
+
+namespace {
+
+// Runs samples and returns (log, violation count).
+std::pair<konata_test::ParsedLog, uint64_t> run(const std::vector<TraceSample>& v) {
+  std::ostringstream out, warn;
+  KonataTracer t(out, konata_label, &warn);
+  for (size_t c = 0; c < v.size(); ++c) t.sample(c, v[c]);
+  t.finish();
+  return {konata_test::parse(out.str()), t.violations()};
+}
+
+TraceSample fetch(int stage, uint32_t fid, uint64_t pc = 0x80000000) {
+  TraceSample s;
+  s.f[stage] = {true, fid};
+  s.f0_pc = pc;
+  return s;
+}
+
+}  // namespace
+
+TEST_CASE("Kanata writer reports handshake pulses instead of occupancy", "[konata]") {
+  // block 0: F0, F1 as a one-cycle pulse, nothing, then F2 (what the trace looked like when
+  // driven by handshakes); it must not reappear as a second entry
+  std::vector<TraceSample> v = {fetch(0, 0), fetch(1, 0), TraceSample{}, fetch(2, 0)};
+  const auto [log, n] = run(v);
+  CHECK(n == 1);
+  CHECK(log.errors.empty());
+  CHECK(log.insns.size() == 1);
+}
+
+TEST_CASE("Kanata writer reports blocks first seen after F0", "[konata]") {
+  const auto [log, n] = run({fetch(1, 5)});
+  CHECK(n == 1);
+  CHECK(log.insns.empty());
+}
+
+TEST_CASE("Kanata writer reports blocks moving back", "[konata]") {
+  const auto [log, n] = run({fetch(0, 0), fetch(2, 0), fetch(1, 0)});
+  CHECK(n == 1);
+  REQUIRE(log.insns.size() == 1);
+  CHECK(log.errors.empty());
+}
+
+TEST_CASE("Kanata writer reports an older block behind a younger one", "[konata]") {
+  TraceSample c1 = fetch(0, 1);  // block 1 in F0, block 0 in F1
+  c1.f[1] = {true, 0};
+  TraceSample c2;  // block 1 in F2, block 0 in F1: block 1 overtook block 0
+  c2.f[1] = {true, 0};
+  c2.f[2] = {true, 1};
+  const auto [log, n] = run({fetch(0, 0), c1, c2});
+  CHECK(n == 1);
+  CHECK(log.errors.empty());
+  CHECK(log.insns.size() == 2);
+}
+
+TEST_CASE("Kanata writer reports instructions shown again after retiring", "[konata]") {
+  std::vector<TraceSample> v = konata_test::scenario();
+  TraceSample again;
+  again.b[2] = {true, 4};  // I4 retired at cycle 14
+  v.push_back(again);
+  const auto [log, n] = run(v);
+  CHECK(n == 1);
+  CHECK(log.errors.empty());
+  CHECK(log.insns.size() == 7);
+}
+
+TEST_CASE("Kanata writer reports instructions in X that never were in D", "[konata]") {
+  TraceSample s;
+  s.b[0] = {true, 9};
+  const auto [log, n] = run({s});
+  CHECK(n == 1);
+  CHECK(log.insns.empty());
 }

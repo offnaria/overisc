@@ -9,6 +9,12 @@
 //
 // Stages (lane 0): F0 F1 F2 FB D X M W. Fetch blocks that are flushed before any of their
 // instructions reach D appear as flushed pseudo-instructions labeled "fetch block".
+//
+// The trace must show a block or instruction in its stage in every cycle it is there
+// (occupancy, not handshake pulses): one that is not shown anywhere is taken as flushed. Input
+// that breaks this (an ID shown again after it was flushed or completed, a block moving back
+// to an earlier stage or first seen after F0, a younger block ahead of an older one) is
+// reported on `warn` and ignored, so it cannot produce misleading entries.
 #pragma once
 
 #include <cstdint>
@@ -16,6 +22,7 @@
 #include <map>
 #include <ostream>
 #include <string>
+#include <set>
 #include <vector>
 
 struct TraceSlot {
@@ -43,7 +50,10 @@ class KonataTracer {
   // label(pc, insn) returns the text for the label pane (e.g. "80000000: addi a0, a0, 1").
   using LabelFn = std::function<std::string(uint64_t pc, uint32_t insn)>;
 
-  KonataTracer(std::ostream& out, LabelFn label);
+  KonataTracer(std::ostream& out, LabelFn label, std::ostream* warn = nullptr);
+
+  // Number of trace-rule violations seen so far (see above).
+  uint64_t violations() const { return violations_; }
 
   // Records one cycle. Cycles must be passed in increasing order.
   void sample(uint64_t cycle, const TraceSample& s);
@@ -81,6 +91,12 @@ class KonataTracer {
   uint64_t last_cycle_ = 0;
   uint64_t next_kid_ = 0;
   uint64_t next_retire_ = 0;
+  std::ostream* warn_;
+  uint64_t violations_ = 0;
+  std::set<uint32_t> done_fids_;  // flushed or consumed fetch blocks
+  std::set<uint32_t> done_iids_;  // retired or flushed instructions
+
+  void violation(uint64_t cycle, const std::string& what);
   std::map<uint32_t, Block> blocks_;  // live fetch blocks by fetch block ID
   std::map<uint32_t, Insn> insns_;    // live instructions by instruction ID
 };

@@ -3,6 +3,7 @@
 // Per cycle the SV side fills a sample with the overisc_konata_* setters and then calls
 // overisc_konata_cycle().
 #include <fstream>
+#include <iostream>
 #include <memory>
 #include <string>
 
@@ -31,7 +32,7 @@ int overisc_konata_open(const char* path) {
   auto s = std::make_unique<State>();
   s->file.open(path);
   if (!s->file) return -1;
-  s->tracer = std::make_unique<KonataTracer>(s->file, konata_label);
+  s->tracer = std::make_unique<KonataTracer>(s->file, konata_label, &std::cerr);
   state() = std::move(s);
   return 0;
 }
@@ -73,6 +74,9 @@ void overisc_konata_cycle(long long cycle) {
 void overisc_konata_close() {
   if (!state()) return;
   state()->tracer->finish();
+  if (const uint64_t n = state()->tracer->violations()) {
+    std::cerr << "[konata] " << n << " trace rule violation(s); the log may be incomplete\n";
+  }
   state().reset();
 }
 
