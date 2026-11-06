@@ -16,4 +16,8 @@ interface overisc_pipe_if #(
   modport sink(input data, input valid, output ready);
   modport source(output data, output valid, input ready);
 
+  function automatic logic hs();  // handshake success
+    return valid && ready;
+  endfunction
+
 endinterface
