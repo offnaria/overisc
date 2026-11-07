@@ -28,7 +28,6 @@ module overisc_core_top
 
   // internal interface
   overisc_pipe_if #(.DATA_W($bits(pcgen_source_t))) pcgen_source ();
-  overisc_pipe_if #(.DATA_W($bits(pcgen_source_t))) ifu_sink ();
   overisc_pipe_if #(.DATA_W($bits(ifu_source_t))) ifu_source ();
   overisc_pipe_if #(.DATA_W($bits(ifu_source_t))) predec_sink ();
   overisc_pipe_if #(.DATA_W($bits(predec_source_t))) predec_source ();
@@ -36,22 +35,19 @@ module overisc_core_top
 
   // debug
   trace_t trace;
-  pcgen_source_t pcgen_data, ifu_sink_data;
-  ifu_source_t ifu_source_data;
-  predec_source_t predec_source_data, fb_source_data;
+  logic [XLEN-1:0] pcgen_npc;
+  trace_id_t pcgen_nid;
+  pcgen_source_t pcgen_data;
+  ifu_source_t ifu_data;
+  predec_source_t prdec_data, fb_data;
 
   // instances
   overisc_pcgen #(.RESET_VECTOR(RESET_VECTOR)) i_pcgen (.*);
 
-  overisc_skid_buffer #( // This would be merged into IFU in the future, if cache is timing critical.
-      .DATA_W($bits(pcgen_source_t))
-  ) i_skbuf_pcif (
-      .sink  (pcgen_source),
-      .source(ifu_sink),
+  overisc_ifu #() i_ifu (
+      .ifu_sink(pcgen_source),
       .*
   );
-
-  overisc_ifu #() i_ifu (.*);
 
   overisc_skid_buffer #(  // This would be merged into IFU in the future.
       .DATA_W($bits(ifu_source_t))
@@ -77,20 +73,19 @@ module overisc_core_top
 
     // logic
     pcgen_data = pcgen_source_t'(pcgen_source.data);
-    ifu_sink_data = pcgen_source_t'(ifu_sink.data);
-    ifu_source_data = ifu_source_t'(ifu_source.data);
-    predec_source_data = predec_source_t'(predec_source.data);
-    fb_source_data = predec_source_t'(fb_source.data);
+    ifu_data = ifu_source_t'(ifu_source.data);
+    prdec_data = predec_source_t'(predec_source.data);
+    fb_data = predec_source_t'(fb_source.data);
 
     trace = '0;
-    trace.stage[TRACE_F0] = '{valid: pcgen_source.hs(), id: pcgen_data.id};
-    trace.stage[TRACE_F1] = '{valid: ifu_sink.hs(), id: ifu_sink_data.id};
-    trace.stage[TRACE_F2] = '{valid: ifu_source.hs(), id: ifu_source_data.id};
-    trace.stage[TRACE_FB] = '{valid: predec_source.hs(), id: predec_source_data.id};
-    trace.stage[TRACE_D] = '{valid: fb_source.hs(), id: fb_source_data.id};
-    trace.f0_pc = pcgen_data.pc;
-    trace.f2_inst = ifu_source_data.inst;
-    trace.retire[0] = '{valid: fb_source.hs(), id: fb_source_data.id};  // TODO
+    trace.stage[TRACE_F0] = '{valid: 1'b1, id: pcgen_nid};  // Keep asserting valid is allowed.
+    trace.stage[TRACE_F1] = '{valid: pcgen_source.hs(), id: pcgen_data.id};
+    trace.stage[TRACE_F2] = '{valid: ifu_source.hs(), id: ifu_data.id};
+    trace.stage[TRACE_FB] = '{valid: predec_source.hs(), id: prdec_data.id};
+    trace.stage[TRACE_D] = '{valid: fb_source.hs(), id: fb_data.id};
+    trace.f0_pc = pcgen_npc;
+    trace.f2_inst = ifu_data.inst;
+    trace.retire[0] = '{valid: fb_source.hs(), id: fb_data.id};  // TODO
 
     // output
     dbus_req = '{default: '0};

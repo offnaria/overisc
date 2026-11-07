@@ -8,7 +8,11 @@ module overisc_pcgen
     input clk,
     input rst,
 
-    overisc_pipe_if.source pcgen_source
+    overisc_pipe_if.source pcgen_source,
+
+    // debug
+    output logic [XLEN-1:0] pcgen_npc,  // next pc
+    output trace_id_t pcgen_nid  // next id
 
     // TODO: Add sink interface to accept jumps
 );
@@ -38,6 +42,8 @@ module overisc_pcgen
     // output
     pcgen_source.data = source_data;
     pcgen_source.valid = 1'b1;
+    pcgen_npc = pc_w;
+    pcgen_nid = id_w;
   end
 
   always_ff @(posedge clk) begin
