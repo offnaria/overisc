@@ -76,6 +76,7 @@ module overisc_core_top
     trace.stage[TRACE_D] = '{valid: fb_source.hs(), id: fb_source_data.id};
     trace.f0_pc = pcgen_data.pc;
     trace.f2_inst = ifu_source_data.inst;
+    trace.retire[0] = '{valid: fb_source.hs(), id: fb_source_data.id};  // TODO
 
     // output
     dbus_req = '{default: '0};
