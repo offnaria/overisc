@@ -30,12 +30,15 @@ module overisc_core_top
   overisc_pipe_if #(.DATA_W($bits(pcgen_source_t))) pcgen_source ();
   overisc_pipe_if #(.DATA_W($bits(pcgen_source_t))) ifu_sink ();
   overisc_pipe_if #(.DATA_W($bits(ifu_source_t))) ifu_source ();
-  overisc_pipe_if #(.DATA_W($bits(ifu_source_t))) fb_source ();
+  overisc_pipe_if #(.DATA_W($bits(ifu_source_t))) predec_sink ();
+  overisc_pipe_if #(.DATA_W($bits(predec_source_t))) predec_source ();
+  overisc_pipe_if #(.DATA_W($bits(predec_source_t))) fb_source ();
 
   // debug
   trace_t trace;
   pcgen_source_t pcgen_data, ifu_sink_data;
-  ifu_source_t ifu_source_data, fb_source_data;
+  ifu_source_t ifu_source_data;
+  predec_source_t predec_source_data, fb_source_data;
 
   // instances
   overisc_pcgen #(.RESET_VECTOR(RESET_VECTOR)) i_pcgen (.*);
@@ -50,10 +53,20 @@ module overisc_core_top
 
   overisc_ifu #() i_ifu (.*);
 
-  overisc_skid_buffer #(  // TODO: Replace this to deeper FIFO.
+  overisc_skid_buffer #(  // This would be merged into IFU in the future.
       .DATA_W($bits(ifu_source_t))
-  ) i_fb (
+  ) i_skbuf_ifpd (
       .sink  (ifu_source),
+      .source(predec_sink),
+      .*
+  );
+
+  overisc_predec #() i_predec (.*);
+
+  overisc_skid_buffer #(  // TODO: Replace this to deeper FIFO.
+      .DATA_W($bits(predec_source_t))
+  ) i_fb (
+      .sink  (predec_source),
       .source(fb_source),
       .*
   );
@@ -66,13 +79,14 @@ module overisc_core_top
     pcgen_data = pcgen_source_t'(pcgen_source.data);
     ifu_sink_data = pcgen_source_t'(ifu_sink.data);
     ifu_source_data = ifu_source_t'(ifu_source.data);
-    fb_source_data = ifu_source_t'(fb_source.data);
+    predec_source_data = predec_source_t'(predec_source.data);
+    fb_source_data = predec_source_t'(fb_source.data);
 
     trace = '0;
     trace.stage[TRACE_F0] = '{valid: pcgen_source.hs(), id: pcgen_data.id};
     trace.stage[TRACE_F1] = '{valid: ifu_sink.hs(), id: ifu_sink_data.id};
     trace.stage[TRACE_F2] = '{valid: ifu_source.hs(), id: ifu_source_data.id};
-    // TODO: Report TRACE_FB once the Fetch Buffer is a FIFO.
+    trace.stage[TRACE_FB] = '{valid: predec_source.hs(), id: predec_source_data.id};
     trace.stage[TRACE_D] = '{valid: fb_source.hs(), id: fb_source_data.id};
     trace.f0_pc = pcgen_data.pc;
     trace.f2_inst = ifu_source_data.inst;

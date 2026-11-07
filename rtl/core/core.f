@@ -17,4 +17,5 @@ overisc_pipe_if.sv
 // module
 overisc_pcgen.sv
 overisc_ifu.sv
+overisc_predec.sv
 overisc_core_top.sv
