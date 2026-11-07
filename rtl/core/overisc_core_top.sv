@@ -34,6 +34,8 @@ module overisc_core_top
 
   // debug
   trace_t trace;
+  pcgen_source_t pcgen_data, ifu_sink_data;
+  ifu_source_t ifu_source_data, fb_source_data;
 
   // instances
   overisc_pcgen #(.RESET_VECTOR(RESET_VECTOR)) i_pcgen (.*);
@@ -61,30 +63,19 @@ module overisc_core_top
 
 
     // logic
-    trace = '{
-        default: '0,
-        f : '{
-            default: '0,
-            0: '{  // F0
-                valid: pcgen_source.hs(),
-                id: pcgen_source.data[TRACE_ID_W-1:0]
-            },
-            1: '{  // F1
-                valid: ifu_sink.hs(),
-                id: ifu_sink.data[TRACE_ID_W-1:0]
-            },
-            2: '{  // F2
-                valid: ifu_source.hs(),
-                id: ifu_source.data[TRACE_ID_W-1:0]
-            }
-        },
-        f0_pc: pcgen_source.data[$bits(pcgen_source_t)-1-:XLEN],
-        fb: '0,  // TODO
-        d: '{  // Decoder
-            valid: fb_source.hs(),
-            id: fb_source.data[TRACE_ID_W-1:0]
-        }
-    };
+    pcgen_data = pcgen_source_t'(pcgen_source.data);
+    ifu_sink_data = pcgen_source_t'(ifu_sink.data);
+    ifu_source_data = ifu_source_t'(ifu_source.data);
+    fb_source_data = ifu_source_t'(fb_source.data);
+
+    trace = '0;
+    trace.stage[TRACE_F0] = '{valid: pcgen_source.hs(), id: pcgen_data.id};
+    trace.stage[TRACE_F1] = '{valid: ifu_sink.hs(), id: ifu_sink_data.id};
+    trace.stage[TRACE_F2] = '{valid: ifu_source.hs(), id: ifu_source_data.id};
+    // TODO: Report TRACE_FB once the Fetch Buffer is a FIFO.
+    trace.stage[TRACE_D] = '{valid: fb_source.hs(), id: fb_source_data.id};
+    trace.f0_pc = pcgen_data.pc;
+    trace.f2_inst = ifu_source_data.inst;
 
     // output
     dbus_req = '{default: '0};

@@ -12,31 +12,18 @@ module overisc_sim_konata
 );
 
   import "DPI-C" function int overisc_konata_open(input string path);
-  import "DPI-C" function void overisc_konata_fetch(
+  import "DPI-C" function void overisc_konata_stage(
     input int stage,
     input bit valid,
     input int id
   );
   import "DPI-C" function void overisc_konata_front(
     input longint f0_pc,
-    input bit     fb_valid,
-    input int     fb_id
+    input int     f2_inst
   );
   import "DPI-C" function void overisc_konata_redirect(
     input bit valid,
     input int stage
-  );
-  import "DPI-C" function void overisc_konata_decode(
-    input bit     valid,
-    input int     id,
-    input int     fid,
-    input longint pc,
-    input int     insn
-  );
-  import "DPI-C" function void overisc_konata_back(
-    input int stage,
-    input bit valid,
-    input int id
   );
   import "DPI-C" function void overisc_konata_retire(
     input bit valid,
@@ -64,16 +51,11 @@ module overisc_sim_konata
 
   always @(posedge clk) begin
     if (enabled && !rst) begin
-      for (int k = 0; k < TRACE_NF; k++) begin
-        overisc_konata_fetch(k, trace.f[k].valid, int'(trace.f[k].id));
+      for (int k = 0; k < TRACE_NSTAGE; k++) begin
+        overisc_konata_stage(k, trace.stage[k].valid, int'(trace.stage[k].id));
       end
-      overisc_konata_front(longint'(trace.f0_pc), trace.fb.valid, int'(trace.fb.id));
+      overisc_konata_front(longint'(trace.f0_pc), int'(trace.f2_inst));
       overisc_konata_redirect(trace.redirect, int'(trace.redirect_stage));
-      overisc_konata_decode(trace.d.valid, int'(trace.d.id), int'(trace.d_fid),
-                            longint'(trace.d_pc), int'(trace.d_insn));
-      for (int k = 0; k < TRACE_NB; k++) begin
-        overisc_konata_back(k, trace.b[k].valid, int'(trace.b[k].id));
-      end
       for (int k = 0; k < NRET; k++) begin
         overisc_konata_retire(trace.retire[k].valid, int'(trace.retire[k].id));
       end

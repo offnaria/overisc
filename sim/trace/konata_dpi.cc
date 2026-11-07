@@ -37,32 +37,20 @@ int overisc_konata_open(const char* path) {
   return 0;
 }
 
-void overisc_konata_fetch(int stage, unsigned char valid, int id) {
-  state()->sample.f[stage] = {valid != 0, static_cast<uint32_t>(id)};
+void overisc_konata_stage(int stage, unsigned char valid, int id) {
+  state()->sample.stage[stage] = {valid != 0, static_cast<uint32_t>(id)};
 }
 
-void overisc_konata_front(long long f0_pc, unsigned char fb_valid, int fb_id) {
+void overisc_konata_front(long long f0_pc, int f2_inst) {
   TraceSample& s = state()->sample;
   s.f0_pc = static_cast<uint64_t>(f0_pc);
-  s.fb = {fb_valid != 0, static_cast<uint32_t>(fb_id)};
+  s.f2_inst = static_cast<uint32_t>(f2_inst);
 }
 
 void overisc_konata_redirect(unsigned char valid, int stage) {
   TraceSample& s = state()->sample;
   s.redirect = valid != 0;
   s.redirect_stage = stage;
-}
-
-void overisc_konata_decode(unsigned char valid, int id, int fid, long long pc, int insn) {
-  TraceSample& s = state()->sample;
-  s.d = {valid != 0, static_cast<uint32_t>(id)};
-  s.d_fid = static_cast<uint32_t>(fid);
-  s.d_pc = static_cast<uint64_t>(pc);
-  s.d_insn = static_cast<uint32_t>(insn);
-}
-
-void overisc_konata_back(int stage, unsigned char valid, int id) {
-  state()->sample.b[stage] = {valid != 0, static_cast<uint32_t>(id)};
 }
 
 void overisc_konata_retire(unsigned char valid, int id) {

@@ -8,15 +8,14 @@
 #include <riscv/isa_parser.h>
 #endif
 
-std::string konata_label(uint64_t pc, uint32_t insn) {
-  std::ostringstream s;
-  s << std::hex << pc << ": ";
+std::string konata_label(uint32_t inst) {
 #ifdef OVERISC_HAVE_SPIKE_DISASM
   static const isa_parser_t isa("rv64imac_zicsr_zifencei_zicntr", "msu");
   static const disassembler_t dis(&isa);
-  s << dis.disassemble(insn_t(insn));
+  return dis.disassemble(insn_t(inst));
 #else
-  s << "insn 0x" << insn;
-#endif
+  std::ostringstream s;
+  s << "inst 0x" << std::hex << inst;
   return s.str();
+#endif
 }

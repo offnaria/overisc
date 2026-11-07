@@ -1,29 +1,28 @@
 // SPDX-License-Identifier: Apache-2.0
 // A small pipeline scenario for the Kanata log tests, and a parser of the log.
 //
-// Blocks B0..B4 are 8-byte fetch blocks; I0..I4 are instructions. I2 is a jump in X that
-// redirects at the end of cycle 7: I3 (D), B2 (Fetch Buffer) and B3 (F2) are flushed, and B4
-// is fetched from the target.
+// I0..I7 are instructions in fetch order. I2 is a jump in X that redirects at the end of cycle
+// 7: I3 (D), I4 (FB), I5 (F2) and I6 (F1) are wrong-path and flushed; I7 is the jump target.
 //
-// scenario() reports every item in every cycle it is in a stage (level). pulses() turns that
-// into reports of stage entries only; both must give the same log.
+// scenario() reports every instruction in every cycle it is in a stage (level). pulses() turns
+// that into reports of stage entries only; both must give the same log.
 //
-//  cycle  F0  F1  F2  FB      D       X   M   W   retire
-//    0    B0
-//    1    B1  B0
-//    2    B2  B1  B0
-//    3    B3  B2  B1  B0      I0(B0)
-//    4        B3  B2  B1      I1(B0)  I0
-//    5            B3  B2      I2(B1)  I1  I0
-//    6            B3  B2      I2      I1      I0  I0
-//    7            B3  B2      I3(B1)  I2  I1          redirect from X
-//    8    B4                              I2  I1  I1
-//    9        B4                              I2  I2
-//   10            B4
-//   11                B4      I4(B4)
-//   12                                I4
-//   13                                    I4
-//   14                                        I4  I4
+//  cycle  F0  F1  F2  FB  D   X   M   W   retire
+//    0    I0
+//    1    I1  I0
+//    2    I2  I1  I0
+//    3    I3  I2  I1      I0
+//    4    I4  I3  I2      I1  I0
+//    5    I5  I4  I3  I2      I1  I0
+//    6    I6  I5  I4  I3  I2  I1      I0  I0
+//    7        I6  I5  I4  I3  I2  I1      redirect from X
+//    8    I7                      I2  I1  I1
+//    9        I7                      I2  I2
+//   10            I7
+//   11                    I7
+//   12                        I7
+//   13                            I7
+//   14                                I7  I7
 #pragma once
 
 #include <cstdint>
@@ -37,64 +36,60 @@
 
 namespace konata_test {
 
+enum : int { kF0,
+             kF1,
+             kF2,
+             kFB,
+             kD,
+             kX,
+             kM,
+             kW };
+
 inline std::vector<TraceSample> scenario() {
-  const uint32_t insn[] = {0x00150513, 0x00258593, 0x0100006f, 0x00000013, 0x00000013};
-  const uint64_t pc[] = {0x80000000, 0x80000004, 0x80000008, 0x8000000c, 0x80000018};
-  const uint32_t fid_of[] = {0, 0, 1, 1, 4};
+  // addi a0, a0, 1 / addi a1, a1, 2 / j +32 / nop ... / nop at the target
+  const uint32_t inst[] = {0x00150513, 0x00258593, 0x0200006f, 0x00000013,
+                           0x00000013, 0x00000013, 0x00000013, 0x00000013};
+  const uint64_t pc[] = {0x80000000, 0x80000004, 0x80000008, 0x8000000c,
+                         0x80000010, 0x80000014, 0x80000018, 0x80000028};
   std::vector<TraceSample> v(15);
-  auto f = [&](int c, int stage, uint32_t fid, uint64_t fpc = 0) {
-    v[c].f[stage] = {true, fid};
-    if (stage == 0) v[c].f0_pc = fpc;
+  auto at = [&](int c, int stage, uint32_t i) {
+    v[c].stage[stage] = {true, i};
+    if (stage == kF0) v[c].f0_pc = pc[i];
+    if (stage == kF2) v[c].f2_inst = inst[i];
   };
-  auto d = [&](int c, uint32_t i) {
-    v[c].d = {true, i};
-    v[c].d_fid = fid_of[i];
-    v[c].d_pc = pc[i];
-    v[c].d_insn = insn[i];
-  };
-  auto b = [&](int c, int stage, uint32_t i) { v[c].b[stage] = {true, i}; };
-  // the block written into the Fetch Buffer at the end of cycle c is in FB from c + 1
-  auto push = [&](int c, uint32_t fid) { v[c + 1].fb = {true, fid}; };
   auto retire = [&](int c, uint32_t i) { v[c].retire.push_back({true, i}); };
 
-  f(0, 0, 0, 0x80000000);
-  f(1, 0, 1, 0x80000008), f(1, 1, 0);
-  f(2, 0, 2, 0x80000010), f(2, 1, 1), f(2, 2, 0), push(2, 0);
-  f(3, 0, 3, 0x80000018), f(3, 1, 2), f(3, 2, 1), push(3, 1), d(3, 0);
-  f(4, 1, 3), f(4, 2, 2), push(4, 2), d(4, 1), b(4, 0, 0);
-  f(5, 2, 3), d(5, 2), b(5, 0, 1), b(5, 1, 0);
-  f(6, 2, 3), d(6, 2), b(6, 0, 1), b(6, 2, 0), retire(6, 0);
-  v[6].fb = {true, 2};  // B2 waits in the Fetch Buffer
-  v[7].fb = {true, 2};
-  f(7, 2, 3), d(7, 3), b(7, 0, 2), b(7, 1, 1);
+  at(0, kF0, 0);
+  at(1, kF0, 1), at(1, kF1, 0);
+  at(2, kF0, 2), at(2, kF1, 1), at(2, kF2, 0);
+  at(3, kF0, 3), at(3, kF1, 2), at(3, kF2, 1), at(3, kD, 0);
+  at(4, kF0, 4), at(4, kF1, 3), at(4, kF2, 2), at(4, kD, 1), at(4, kX, 0);
+  at(5, kF0, 5), at(5, kF1, 4), at(5, kF2, 3), at(5, kFB, 2), at(5, kX, 1), at(5, kM, 0);
+  at(6, kF0, 6), at(6, kF1, 5), at(6, kF2, 4), at(6, kFB, 3), at(6, kD, 2), at(6, kX, 1);
+  at(6, kW, 0), retire(6, 0);
+  at(7, kF1, 6), at(7, kF2, 5), at(7, kFB, 4), at(7, kD, 3), at(7, kX, 2), at(7, kM, 1);
   v[7].redirect = true;
-  v[7].redirect_stage = 5;  // X
-  f(8, 0, 4, 0x80000018), b(8, 1, 2), b(8, 2, 1), retire(8, 1);
-  f(9, 1, 4), b(9, 2, 2), retire(9, 2);
-  f(10, 2, 4), push(10, 4);
-  d(11, 4);
-  b(12, 0, 4);
-  b(13, 1, 4);
-  b(14, 2, 4), retire(14, 4);
+  v[7].redirect_stage = kX;
+  at(8, kF0, 7), at(8, kM, 2), at(8, kW, 1), retire(8, 1);
+  at(9, kF1, 7), at(9, kW, 2), retire(9, 2);
+  at(10, kF2, 7);
+  at(11, kD, 7);
+  at(12, kX, 7);
+  at(13, kM, 7);
+  at(14, kW, 7), retire(14, 7);
   return v;
 }
 
 // The same scenario reported as stage entries only: a slot is kept only in the cycle its
 // content changed.
 inline std::vector<TraceSample> pulses() {
-  std::vector<TraceSample> v = scenario();
+  const std::vector<TraceSample> v = scenario();
   std::vector<TraceSample> out = v;
-  auto same = [](const TraceSlot& a, const TraceSlot& b) {
-    return a.valid && b.valid && a.id == b.id;
-  };
   for (size_t c = 1; c < v.size(); ++c) {
-    for (int k = 0; k < TraceSample::kNumF; ++k) {
-      if (same(v[c].f[k], v[c - 1].f[k])) out[c].f[k] = {};
-    }
-    if (same(v[c].fb, v[c - 1].fb)) out[c].fb = {};
-    if (same(v[c].d, v[c - 1].d)) out[c].d = {};
-    for (int k = 0; k < TraceSample::kNumB; ++k) {
-      if (same(v[c].b[k], v[c - 1].b[k])) out[c].b[k] = {};
+    for (int k = 0; k < TraceSample::kNumStages; ++k) {
+      const TraceSlot& a = v[c].stage[k];
+      const TraceSlot& b = v[c - 1].stage[k];
+      if (a.valid && b.valid && a.id == b.id) out[c].stage[k] = {};
     }
   }
   return out;

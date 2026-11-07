@@ -7,32 +7,28 @@
 //
 // Every field describes the cycle that ends at the next rising edge ("this cycle").
 //
-// IDs are simulation-only sequence numbers carried in the pipeline payloads:
-//   - fetch block ID: assigned when a block is created (8-byte fetch block, in F0)
-//   - instruction ID: assigned when an instruction leaves the Fetch Buffer
-// Each must increase by one per block / instruction in program order (wrong-path ones included).
+// The instruction ID is a simulation-only sequence number carried in the pipeline payloads. It
+// is assigned in F0 and must increase in program order (wrong-path instructions included).
 //
-// Stage reports (entry events): a valid slot says "this block / instruction is in that stage".
-// The first report for a stage starts the stage; further reports for the same stage are
-// ignored, so a one-cycle handshake pulse and a level held while the item waits give the same
-// log. An item stays in its last reported stage until it is reported in a later one. Missing
-// reports mean nothing; in particular they do not mean "flushed".
+// Stage reports (entry events): a valid slot says "this instruction is in that stage". The
+// first report for a stage starts the stage; further reports for the same stage are ignored,
+// so a one-cycle handshake pulse and a level held while the instruction waits give the same
+// log. An instruction stays in its last reported stage until it is reported in a later one.
+// Missing reports mean nothing, and any stage after F0 may be skipped. Every instruction must
+// start in F0, where f0_pc gives its PC. f2_inst gives its bits when it is reported in F2.
 //
 // Leaving the pipeline is explicit:
 //   - retire: the instruction retires at the end of this cycle
-//   - redirect: everything in a stage before redirect_stage (blocks in F0..F2 and the Fetch
-//     Buffer, instructions in D..W) is flushed at the end of this cycle; the item in
-//     redirect_stage itself stays. This is the redirect bus (oldest source wins).
-//
-// d_fid names the block that holds the first halfword of the instruction in D.
+//   - redirect: every instruction in a stage before redirect_stage is flushed at the end of
+//     this cycle; the one in redirect_stage itself stays. This is the redirect bus (oldest
+//     source wins).
 package overisc_trace_pkg;
 
   import overisc_cfg_pkg::*;
   import overisc_commit_pkg::NRET;
 
   localparam int TRACE_ID_W = 32;
-  localparam int TRACE_NF = 3;  // F0, F1, F2
-  localparam int TRACE_NB = 3;  // X, M, W
+  localparam int TRACE_NSTAGE = 8;
 
   typedef logic [TRACE_ID_W-1:0] trace_id_t;
 
@@ -53,22 +49,13 @@ package overisc_trace_pkg;
   } trace_slot_t;
 
   typedef struct packed {
-    // fetch blocks reported in F0..F2 (index 0 = F0); id = fetch block ID
-    trace_slot_t [TRACE_NF-1:0] f;
-    logic [XLEN-1:0]            f0_pc;           // fetch address of the block in f[0]
-    trace_slot_t                fb;              // fetch block reported in the Fetch Buffer
-    // instruction reported in D; id = instruction ID
-    trace_slot_t                d;
-    trace_id_t                  d_fid;
-    logic [XLEN-1:0]            d_pc;
-    logic [ILEN-1:0]            d_insn;
-    // instructions reported in X, M, W (index 0 = X)
-    trace_slot_t [TRACE_NB-1:0] b;
-    // instructions that retire at the end of this cycle
-    trace_slot_t [NRET-1:0]     retire;
+    trace_slot_t [TRACE_NSTAGE-1:0] stage;  // stage reports, indexed by trace_stage_e
+    logic [XLEN-1:0] f0_pc;  // PC of the instruction reported in F0
+    logic [ILEN-1:0] f2_inst;  // bits of the instruction reported in F2
+    trace_slot_t [NRET-1:0] retire;  // instructions that retire at the end of this cycle
     // flush of everything before redirect_stage at the end of this cycle
-    logic                       redirect;
-    logic [2:0]                 redirect_stage;  // trace_stage_e (plain bits: '{default: '0} works)
+    logic redirect;
+    logic [2:0] redirect_stage;  // trace_stage_e
   } trace_t;
 
 endpackage

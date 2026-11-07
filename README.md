@@ -118,9 +118,9 @@ about 30 MB per million cycles, so skip the log for long programs such as Linux.
 `OVERISC_KONATA=OFF` removes the hook altogether. CMake options can be passed through
 `make sim CMAKE_ARGS=...`.
 
-Open the log in Konata. Stages are `F0 F1 F2 FB D X M W`; instruction labels use Spike's
-disassembler when Spike is built (`make spike`). Fetch blocks flushed before any of their
-instructions reached D show up as flushed `fetch block` entries.
+Open the log in Konata. Stages are `F0 F1 F2 FB D X M W`. Labels show the PC and, once the
+instruction reached F2, its disassembly (Spike's disassembler if Spike is built with `make spike`,
+otherwise the encoding); wrong-path instructions flushed before F2 show only the PC.
 
 ## License
 
