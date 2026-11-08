@@ -18,4 +18,5 @@ overisc_pipe_if.sv
 overisc_pcgen.sv
 overisc_ifu.sv
 overisc_predec.sv
+overisc_fetch_buffer.sv
 overisc_core_top.sv

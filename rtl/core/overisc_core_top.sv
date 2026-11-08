@@ -59,8 +59,9 @@ module overisc_core_top
 
   overisc_predec #() i_predec (.*);
 
-  overisc_skid_buffer #(  // TODO: Replace this to deeper FIFO.
-      .DATA_W($bits(predec_source_t))
+  overisc_fetch_buffer #(
+      .DATA_W ($bits(predec_source_t)),
+      .DEPTH_W(4)
   ) i_fb (
       .sink  (predec_source),
       .source(fb_source),
