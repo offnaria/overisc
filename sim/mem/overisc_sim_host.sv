@@ -60,8 +60,8 @@ module overisc_sim_host #(
   bit done;
 
   initial begin
-    longint seed = 1;
-    string  profile = "fast";
+    automatic longint seed = 1;
+    automatic string profile = "fast";
     longint entry;
 
     max_cycles = 1_000_000;

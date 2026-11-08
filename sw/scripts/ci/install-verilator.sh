@@ -4,7 +4,7 @@
 # 使い方: install-verilator.sh <prefix>
 set -euo pipefail
 
-VERSION=v5.026
+VERSION=v5.054
 prefix=${1:?usage: $0 <prefix>}
 
 if [[ -x ${prefix}/bin/verilator ]]; then

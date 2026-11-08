@@ -31,8 +31,8 @@ module tb_axi_mem;
     input longint cycles
   );
 
-  logic clk = 1'b0;
-  logic rst = 1'b1;
+  logic clk;
+  logic rst;
   always #5 clk <= ~clk;
 
   axi_req_t ireq, dreq;
@@ -178,10 +178,13 @@ module tb_axi_mem;
   endtask
 
   initial begin
-    longint seed = 1;
-    string profile = "small";
-    int iters = 200;
+    automatic longint seed = 1;
+    automatic string profile = "small";
+    automatic int iters = 200;
     int bresp;
+
+    clk = 1'b0;
+    rst = 1'b1;
 
     void'($value$plusargs("seed=%d", seed));
     void'($value$plusargs("mem_profile=%s", profile));
@@ -224,8 +227,8 @@ module tb_axi_mem;
 
     // backdoor agrees with the bus
     begin
-      longint a = DramBase + 64'h100;
-      longint v = 0;
+      automatic longint a = DramBase + 64'h100;
+      automatic longint v = 0;
       for (int j = 7; j >= 0; j--) v = (v << 8) | longint'(expect_byte(a + longint'(j)));
       if (overisc_sim_mem_read64(a) != v) begin
         $display("ERROR: backdoor read mismatch");
