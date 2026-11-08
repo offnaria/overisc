@@ -198,3 +198,21 @@ TEST_CASE("Kanata writer stays fast with many instructions in flight", "[konata]
   CHECK(t.violations() == 0);
   CHECK(parse(out.str()).insns.size() == n);
 }
+
+TEST_CASE("Kanata writer takes the latest stage of a bypass in the same cycle", "[konata]") {
+  using namespace konata_test;
+  TraceSample c1 = at(kF2, 0);
+  c1.stage[kFB] = {true, 0};  // enters the Fetch Buffer ...
+  c1.stage[kD] = {true, 0};   // ... and leaves it in the same cycle
+  const Run r = run({at(kF0, 0), c1, at(kD, 0)});
+  CHECK(r.violations == 0);
+  REQUIRE(r.log.insns.size() == 1);
+  CHECK(r.log.insns.at(0).stages == Stages{{"F0", 0}, {"D", 1}});
+}
+
+TEST_CASE("Kanata writer still reports moving back in a later cycle", "[konata]") {
+  using namespace konata_test;
+  TraceSample c1 = at(kD, 0);
+  const Run r = run({at(kF0, 0), c1, at(kFB, 0)});
+  CHECK(r.violations == 1);
+}

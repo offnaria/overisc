@@ -47,13 +47,16 @@ void KonataTracer::report(uint64_t c, uint32_t id, Stage st, const TraceSample& 
     last_id_ = id;
     const uint64_t kid = next_kid_++;
     const std::string k = std::to_string(kid);
-    it = insns_.emplace(id, Insn{kid, kF0, false}).first;
+    it = insns_.emplace(id, Insn{kid, kF0, c, false}).first;
     emit(c, "I\t" + k + "\t" + std::to_string(id) + "\t0");
     emit(c, "L\t" + k + "\t0\t" + hex(s.f0_pc) + ": ");
     emit(c, "S\t" + k + "\t0\t" + kStageName[kF0]);
     return;
   }
   Insn& i = it->second;
+  // Stages are scanned from the latest one, so an earlier stage reported in the same cycle
+  // means the instruction passed through it (e.g. a bypassed buffer): keep the latest.
+  if (st < i.stage && i.stage_cycle == c) return;
   if (st < i.stage) {
     violation(c, where + ": moved back from " + kStageName[i.stage]);
     return;
@@ -70,6 +73,7 @@ void KonataTracer::report(uint64_t c, uint32_t id, Stage st, const TraceSample& 
     }
   }
   i.stage = st;
+  i.stage_cycle = c;
   const std::string k = std::to_string(i.kid);
   emit(c, "S\t" + k + "\t0\t" + kStageName[st]);
   if (st == kF2 && !i.has_inst) {

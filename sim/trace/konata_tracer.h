@@ -3,7 +3,8 @@
 // (overisc_trace_pkg::trace_t, see rtl/core/overisc_trace_pkg.sv for the rules).
 //
 // Samples are stage reports: the first report of an instruction in a stage starts that stage,
-// repeats are ignored, and missing reports mean nothing. Instructions leave by retire or by a
+// repeats are ignored, and missing reports mean nothing. An instruction reported in several
+// stages in the same cycle (it passed through a bypassed buffer) takes the latest one. Instructions leave by retire or by a
 // redirect, which flushes everything in the stages before the redirecting one. Stages
 // (lane 0): F0 F1 F2 FB D X M W. The label is the PC from F0 followed by the disassembly from
 // F2, so an instruction flushed before F2 shows only its PC.
@@ -67,7 +68,8 @@ class KonataTracer {
   struct Insn {
     uint64_t kid;  // ID in the log file
     Stage stage;
-    bool has_inst;  // disassembly added to the label
+    uint64_t stage_cycle;  // cycle `stage` started
+    bool has_inst;         // disassembly added to the label
   };
 
   void emit(uint64_t cycle, std::string line);

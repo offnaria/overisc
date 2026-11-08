@@ -14,7 +14,8 @@
 // first report for a stage starts the stage; further reports for the same stage are ignored,
 // so a one-cycle handshake pulse and a level held while the instruction waits give the same
 // log. An instruction stays in its last reported stage until it is reported in a later one.
-// Missing reports mean nothing, and any stage after F0 may be skipped. Every instruction must
+// Missing reports mean nothing, and any stage after F0 may be skipped. An instruction reported
+// in several stages in the same cycle (passing through a bypassed buffer) is in the latest one. Every instruction must
 // start in F0, where f0_pc gives its PC. f2_inst gives its bits when it is reported in F2.
 //
 // Leaving the pipeline is explicit:
