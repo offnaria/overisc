@@ -9,7 +9,7 @@ current tasks: [docs/m0-tasks.md](docs/m0-tasks.md).
 
 | Tool | Version used | Notes |
 |---|---|---|
-| Verilator | 5.026 | |
+| Verilator | 5.054 | needs `liblz4-dev` for FST waveforms |
 | CMake | 3.22 or later | |
 | g++ | 11 or later (C++20) | |
 | Verible | v0.0-4007 | `verible-verilog-format` |
