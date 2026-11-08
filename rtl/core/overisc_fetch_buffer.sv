@@ -56,12 +56,12 @@ module overisc_fetch_buffer #(
       source_valid_w = fifo_used || sink_hs;
     end
 
-    if (fifo_used && fifo_ready) begin  // Memory read.
+    if (fifo_used && source.ready) begin  // Memory read.
       fifo_rptr_w = fifo_rptr + 'd1;
     end
 
     mem_write = '0;
-    if (sink_hs && !fifo_ready) begin  // Memory write
+    if (sink_hs && ((source_valid && !source.ready) || fifo_used)) begin  // Memory write.
       fifo_wptr_w = fifo_wptr + 'd1;
       mem_write   = 1'b1;
     end
