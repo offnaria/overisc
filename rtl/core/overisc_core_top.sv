@@ -40,6 +40,8 @@ module overisc_core_top
   pcgen_source_t pcgen_data;
   ifu_source_t ifu_data;
   predec_source_t prdec_data, fb_data;
+  trace_id_t fb_trace_id;
+  logic fb_trace_valid;
 
   // instances
   overisc_pcgen #(.RESET_VECTOR(RESET_VECTOR)) i_pcgen (.*);
@@ -60,7 +62,7 @@ module overisc_core_top
   overisc_predec #() i_predec (.*);
 
   overisc_fetch_buffer #(
-      .DATA_W ($bits(predec_source_t)),
+      .DATA_T (predec_source_t),
       .DEPTH_W(4)
   ) i_fb (
       .sink  (predec_source),
@@ -83,7 +85,7 @@ module overisc_core_top
     trace.stage[TRACE_F1] = '{valid: pcgen_source.hs(), id: pcgen_data.id};
     trace.stage[TRACE_F2] = '{valid: ifu_source.hs(), id: ifu_data.id};
     trace.stage[TRACE_FB] = '{valid: predec_source.hs(), id: prdec_data.id};
-    trace.stage[TRACE_D] = '{valid: fb_source.hs(), id: fb_data.id};
+    trace.stage[TRACE_D] = '{valid: fb_trace_valid, id: fb_trace_id};
     trace.f0_pc = pcgen_npc;
     trace.f2_inst = ifu_data.inst;
     trace.retire[0] = '{valid: fb_source.hs(), id: fb_data.id};  // TODO
@@ -95,10 +97,20 @@ module overisc_core_top
   end
 
   // TODO: Remove this block once implementation completed.
+  logic [31:0] cnt, cnt_w;
   always_comb begin
-    fb_source.ready = 1'b1;
+    cnt_w = (cnt == '0) ? 'd7 : (cnt - 'd1);
+    fb_source.ready = (cnt == '0);
     if (0) begin
       $write("data=%d valid=%d ready=%d\n", fb_source.data, fb_source.valid, fb_source.ready);
+    end
+  end
+
+  always_ff @(posedge clk) begin
+    cnt <= cnt_w;
+
+    if (rst) begin
+      cnt <= 'd7;
     end
   end
 

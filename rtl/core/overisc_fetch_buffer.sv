@@ -1,34 +1,36 @@
 // SPDX-License-Identifier: CERN-OHL-P-2.0
 // Fetch Buffer module of Overisc core.
 //
+// DATA_T: The type of the data. This is expected to have `id` field to dump Konata trace.
+//
 // DEPTH_W: The bit width of the depth of the buffer. Array-based FIFO,
 //          which depth is 2^DEPTH_W, with output register, is implemented.
 
-module overisc_fetch_buffer #(
-    parameter DATA_W  = 32,
+module overisc_fetch_buffer
+  import overisc_pipe_pkg::*, overisc_trace_pkg::trace_id_t;
+#(
+    parameter type DATA_T = predec_source_t,
     parameter DEPTH_W = 4
 ) (
     input clk,
     input rst,
 
     overisc_pipe_if.sink   sink,
-    overisc_pipe_if.source source
+    overisc_pipe_if.source source,
+
+    output trace_id_t fb_trace_id,
+    output logic fb_trace_valid
 );
 
-  logic [DATA_W-1:0] source_data, source_data_w;
+  DATA_T source_data, source_data_w;
   logic source_valid, source_valid_w;
-
-  // logic [DATA_W-1:0] skid_data, skid_data_w;
-  // logic skid_valid, skid_valid_w;
-  // logic skid_ready;
-
 
   logic sink_ready, sink_ready_w;
 
-  logic sink_hs;
+  logic  sink_hs;
 
   // Memory array
-  logic [DATA_W-1:0] fifo_mem[2**DEPTH_W];
+  DATA_T fifo_mem[2**DEPTH_W];
   logic [DEPTH_W:0] fifo_wptr, fifo_wptr_w;  // MSB is used to check if FIFO is full.
   logic [DEPTH_W:0] fifo_rptr, fifo_rptr_w;
   logic fifo_used, fifo_used_w;
@@ -74,6 +76,8 @@ module overisc_fetch_buffer #(
     source.data = source_data;
     source.valid = source_valid;
     sink.ready = sink_ready;
+    fb_trace_id = source_data_w.id;
+    fb_trace_valid = source_valid_w;
 
   end
 
