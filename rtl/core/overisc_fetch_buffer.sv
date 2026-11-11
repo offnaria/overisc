@@ -71,7 +71,7 @@ module overisc_fetch_buffer
     end
 
     if (kill) begin
-      source_valid_W = '0;
+      source_valid_w = '0;
       fifo_wptr_w = '0;
       fifo_rptr_w = '0;
     end
