@@ -32,6 +32,14 @@ module overisc_core_top
   overisc_pipe_if #(.DATA_W($bits(ifu_source_t))) predec_sink ();
   overisc_pipe_if #(.DATA_W($bits(predec_source_t))) predec_source ();
   overisc_pipe_if #(.DATA_W($bits(predec_source_t))) fb_source ();
+  overisc_pipe_if #(.DATA_W($bits(dec_source_t))) dec_source ();
+  overisc_pipe_if #(.DATA_W($bits(dec_source_t))) ex_sink ();
+  overisc_pipe_if #(.DATA_W($bits(exec_source_t))) ex_source ();
+  overisc_pipe_if #(.DATA_W($bits(exec_source_t))) wb ();  // write back
+
+  // PC update
+  logic bru_valid;
+  logic [XLEN-1:0] bru_tpc;
 
   // debug
   trace_t trace;
@@ -42,12 +50,15 @@ module overisc_core_top
   predec_source_t prdec_data, fb_data;
   trace_id_t fb_trace_id;
   logic fb_trace_valid;
+  dec_source_t dec_data;
+  exec_source_t ex_data, wb_data;
 
   // instances
   overisc_pcgen #(.RESET_VECTOR(RESET_VECTOR)) i_pcgen (.*);
 
   overisc_ifu #() i_ifu (
       .ifu_sink(pcgen_source),
+      .kill(bru_valid),
       .*
   );
 
@@ -56,6 +67,7 @@ module overisc_core_top
   ) i_skbuf_ifpd (
       .sink  (ifu_source),
       .source(predec_sink),
+      .kill  (bru_valid),
       .*
   );
 
@@ -67,6 +79,32 @@ module overisc_core_top
   ) i_fb (
       .sink  (predec_source),
       .source(fb_source),
+      .kill  (bru_valid),
+      .*
+  );
+
+  overisc_dec #() i_dec (
+      .dec_sink(fb_source),
+      .*
+  );
+
+  overisc_reg_slice #(  // TODO: Just for initial testing.
+      .DATA_W($bits(dec_source_t))
+  ) i_slice_idex (
+      .sink  (dec_source),
+      .source(ex_sink),
+      .kill  (bru_valid),
+      .*
+  );
+
+  overisc_exec #() i_exec (.*);
+
+  overisc_skid_buffer #(  // TODO: Just for initial testing.
+      .DATA_W($bits(exec_source_t))
+  ) i_skbuf_exma (
+      .sink  (ex_source),
+      .source(wb),
+      .kill  ('0),
       .*
   );
 
@@ -79,6 +117,9 @@ module overisc_core_top
     ifu_data = ifu_source_t'(ifu_source.data);
     prdec_data = predec_source_t'(predec_source.data);
     fb_data = predec_source_t'(fb_source.data);
+    dec_data = dec_source_t'(dec_source.data);
+    ex_data = exec_source_t'(ex_source.data);
+    wb_data = exec_source_t'(wb.data);
 
     trace = '0;
     trace.stage[TRACE_F0] = '{valid: 1'b1, id: pcgen_nid};  // Keep asserting valid is allowed.
@@ -86,9 +127,14 @@ module overisc_core_top
     trace.stage[TRACE_F2] = '{valid: ifu_source.hs(), id: ifu_data.id};
     trace.stage[TRACE_FB] = '{valid: predec_source.hs(), id: prdec_data.id};
     trace.stage[TRACE_D] = '{valid: fb_trace_valid, id: fb_trace_id};
+    trace.stage[TRACE_X] = '{valid: dec_source.hs(), id: dec_data.id};
+    trace.stage[TRACE_M] = '{valid: ex_source.hs(), id: ex_data.id};
+    trace.stage[TRACE_W] = '{valid: wb.hs(), id: wb_data.id};
     trace.f0_pc = pcgen_npc;
     trace.f2_inst = ifu_data.inst;
-    trace.retire[0] = '{valid: fb_source.hs(), id: fb_data.id};  // TODO
+    trace.retire[0] = '{valid: wb.hs(), id: wb_data.id};  // TODO
+    trace.redirect = bru_valid;  // TODO: Add other causes.
+    trace.redirect_id = ex_data.id;  // TODO
 
     // output
     dbus_req = '{default: '0};
@@ -97,20 +143,9 @@ module overisc_core_top
   end
 
   // TODO: Remove this block once implementation completed.
-  logic [31:0] cnt, cnt_w;
   always_comb begin
-    cnt_w = (cnt == '0) ? 'd7 : (cnt - 'd1);
-    fb_source.ready = (cnt == '0);
     if (0) begin
-      $write("data=%d valid=%d ready=%d\n", fb_source.data, fb_source.valid, fb_source.ready);
-    end
-  end
-
-  always_ff @(posedge clk) begin
-    cnt <= cnt_w;
-
-    if (rst) begin
-      cnt <= 'd7;
+      $write("data=%d valid=%d ready=%d\n", wb.data, wb.valid, wb.ready);
     end
   end
 

@@ -19,4 +19,8 @@ overisc_pcgen.sv
 overisc_ifu.sv
 overisc_predec.sv
 overisc_fetch_buffer.sv
+overisc_dec.sv
+overisc_exec.sv
+overisc_alu.sv
+overisc_bru.sv
 overisc_core_top.sv
