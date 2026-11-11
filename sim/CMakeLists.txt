@@ -21,6 +21,7 @@ set(RISCV_PREFIX "riscv64-linux-" CACHE STRING "RISC-V toolchain prefix (may inc
 set(SPIKE_HOME ${OVERISC_ROOT}/build/spike/install CACHE PATH "Spike install directory (make spike)")
 option(OVERISC_KONATA "Hook the Kanata logger to the core (needs the core's trace signal)" ON)
 option(OVERISC_KONATA_REGRESSION "Write Kanata logs in the riscv-tests regression" ON)
+option(OVERISC_KONATA_REGRESSION_KEEP "Keep the regression's Kanata logs (OFF: /dev/null, only check the trace rules)" ON)
 
 find_package(verilator REQUIRED HINTS $ENV{VERILATOR_ROOT})
 add_subdirectory(${OVERISC_ROOT}/third_party/Catch2 catch2 EXCLUDE_FROM_ALL)
@@ -183,9 +184,12 @@ if(EXISTS ${M0_LIST})
   foreach(profile IN LISTS REGRESSION_PROFILES)
     foreach(seed IN LISTS REGRESSION_SEEDS)
       foreach(t IN LISTS M0_TESTS)
-        # Kanata log per test, overwritten by the next run of the same test
-        if(OVERISC_KONATA AND OVERISC_KONATA_REGRESSION)
+        # Kanata log per test (overwritten by the next run of the same test); the run also fails
+        # on a trace rule violation
+        if(OVERISC_KONATA AND OVERISC_KONATA_REGRESSION AND OVERISC_KONATA_REGRESSION_KEEP)
           set(konata --konata ${CMAKE_BINARY_DIR}/konata/${t}_${profile}_s${seed}.log)
+        elseif(OVERISC_KONATA AND OVERISC_KONATA_REGRESSION)
+          set(konata --konata /dev/null)
         else()
           set(konata)
         endif()
@@ -197,6 +201,19 @@ if(EXISTS ${M0_LIST})
       endforeach()
     endforeach()
   endforeach()
+  # Trace rules only (label "trace-rules"): every program for a limited number of cycles, pass
+  # or not; fails on a Kanata trace rule violation (e.g. a wrong-path instruction that was not
+  # killed) or an ERROR. Unlike the riscv-tests label this can be required before M0.
+  if(OVERISC_KONATA)
+    foreach(profile IN ITEMS small large)
+      foreach(t IN LISTS M0_TESTS)
+        add_test(NAME "trace-rules/${profile}/${t}"
+          COMMAND test_core --elf ${RVTESTS_DIR}/${t} --seed 1 --profile ${profile}
+            --max-cycles 20000 --konata /dev/null --trace-rules-only)
+        set_tests_properties("trace-rules/${profile}/${t}" PROPERTIES LABELS "trace-rules;core")
+      endforeach()
+    endforeach()
+  endif()
 else()
   message(WARNING "${M0_LIST} not found; run `make riscv-tests` and reconfigure")
 endif()

@@ -45,6 +45,7 @@ Tests are registered in CTest with labels:
 | `unit` | C++ unit tests (AXI slave model, ELF loader) |
 | `verilator` | Verilated tests of the simulation models (memory SV/DPI glue, host/tohost) |
 | `riscv-tests` | the core running riscv-tests, one test per program x seed x memory profile |
+| `trace-rules` | every riscv-test for 20000 cycles (profiles `small`, `large`), required only to keep the pipeline trace consistent (no Konata trace rule violation, e.g. a wrong-path instruction that was not killed) and to raise no ERROR; passing the program is not required |
 
 ```sh
 ctest --test-dir build/sim -N                      # list tests
@@ -119,9 +120,11 @@ it into a Kanata log when `test_core` gets `--konata <file>`. The callers turn i
 | `make run ELF=...` | `build/sim/konata/<program>_<profile>_s<seed>.log` (`KONATA=0` to skip) |
 | CTest regression | same path per test (CMake option `OVERISC_KONATA_REGRESSION=OFF` to skip; CI skips) |
 
-A file is overwritten by the next run of the same test. A run that reaches the cycle limit writes
-about 30 MB per million cycles, so skip the log for long programs such as Linux. The CMake option
-`OVERISC_KONATA=OFF` removes the hook altogether. CMake options can be passed through
+A file is overwritten by the next run of the same test. A run that writes a Konata log also fails
+on a trace rule violation. A run that reaches the cycle limit writes about 30 MB per million
+cycles, so skip the log for long programs such as Linux. CMake options: `OVERISC_KONATA=OFF`
+removes the hook altogether, `OVERISC_KONATA_REGRESSION_KEEP=OFF` sends the regression's logs to
+`/dev/null` (still checked; CI does this). CMake options can be passed through
 `make sim CMAKE_ARGS=...`.
 
 Open the log in Konata. Stages are `F0 F1 F2 FB D X M W`. Labels show the PC and, once the

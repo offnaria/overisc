@@ -50,6 +50,7 @@ A3（AXI 側）と A4 はテストベンチ（B）の入口なので、先に構
 | B7 | 確定命令ごとに Spike を 1 命令進めて比較（PC、命令、例外、rd 書き込み、メモリ、CSR 書き込み）。不一致時に直前 N 命令の記録を出力 | C | A4, B6 |
 | B8 | M0 用の Spike 構成を DUT に合わせる（下記「未決事項 1」） | U/C | B7 |
 | B9 | ✅ テストベンチ自身の試験: ダミーのマスタでメモリモデルを叩き、ランダム遅延下で読み書きが正しいこと | C | B2 |
+| B12 | ✅ Konata の trace の決まりを試験にする（`--konata` を付けた実行は違反で FAIL、ラベル `trace-rules` で全 riscv-tests を 2 万サイクルずつ流し、PASS は問わず違反と ERROR がないことを確かめる。CI で必須） | C | B10 |
 | B11 | ✅ `overisc_reg_slice` / `overisc_skid_buffer` の単体試験（ランダムな ready/valid、順序、出力側の規則、全スループット、skid の ready が組み合わせでつながらないこと） | C | — |
 | B10 | ✅ Konata 用のパイプラインログ（コア内部の `trace` 信号から Kanata 形式を出力。D-38） | C | B4 |
 

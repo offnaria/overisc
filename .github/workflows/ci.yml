@@ -84,10 +84,11 @@ jobs:
         run: make format-check
 
       - name: Build simulators and tests
-        # no Kanata logs in the regression: a TIMEOUT run writes ~30 MB each
-        run: make sim CMAKE_ARGS=-DOVERISC_KONATA_REGRESSION=OFF
+        # the regression checks the Kanata trace rules but does not keep the logs (a TIMEOUT run
+        # would write ~30 MB each)
+        run: make sim CMAKE_ARGS=-DOVERISC_KONATA_REGRESSION_KEEP=OFF
 
-      - name: Tests (except the core regression)
+      - name: Tests (except the core regression; includes the trace-rules checks)
         run: ctest --test-dir build/sim -j"$(nproc)" --output-on-failure -LE riscv-tests
 
       - name: riscv-tests regression on the core (informational until M0)

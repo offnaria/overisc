@@ -2,6 +2,8 @@
 // DPI functions behind overisc_sim_konata.sv: one Kanata log per simulation.
 // Per cycle the SV side fills a sample with the overisc_konata_* setters and then calls
 // overisc_konata_cycle().
+#include "konata_dpi.h"
+
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -23,7 +25,16 @@ std::unique_ptr<State>& state() {
   return s;
 }
 
+KonataRunInfo& run_info() {
+  static KonataRunInfo info;
+  return info;
+}
+
 }  // namespace
+
+void konata_reset_run_info() { run_info() = KonataRunInfo{}; }
+
+const KonataRunInfo& konata_run_info() { return run_info(); }
 
 extern "C" {
 
@@ -66,6 +77,8 @@ void overisc_konata_cycle(long long cycle) {
 void overisc_konata_close() {
   if (!state()) return;
   state()->tracer->finish();
+  run_info().opened = true;
+  run_info().violations = state()->tracer->violations();
   if (const uint64_t n = state()->tracer->violations()) {
     std::cerr << "[konata] " << n << " trace rule violation(s); the log may be incomplete\n";
   }
