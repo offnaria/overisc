@@ -23,7 +23,7 @@ module overisc_sim_konata
   );
   import "DPI-C" function void overisc_konata_redirect(
     input bit valid,
-    input int stage
+    input int id
   );
   import "DPI-C" function void overisc_konata_retire(
     input bit valid,
@@ -55,7 +55,7 @@ module overisc_sim_konata
         overisc_konata_stage(k, trace.stage[k].valid, int'(trace.stage[k].id));
       end
       overisc_konata_front(longint'(trace.f0_pc), int'(trace.f2_inst));
-      overisc_konata_redirect(trace.redirect, int'(trace.redirect_stage));
+      overisc_konata_redirect(trace.redirect, int'(trace.redirect_id));
       for (int k = 0; k < NRET; k++) begin
         overisc_konata_retire(trace.retire[k].valid, int'(trace.retire[k].id));
       end

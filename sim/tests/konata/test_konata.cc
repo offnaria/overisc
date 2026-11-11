@@ -105,18 +105,48 @@ TEST_CASE("Kanata log: a gap between stage reports does not flush", "[konata]") 
   CHECK(r.log.insns.at(0).stages == Stages{{"F0", 0}, {"F1", 1}, {"F2", 3}});
 }
 
-TEST_CASE("Kanata log: a redirect flushes only the stages before its source", "[konata]") {
+TEST_CASE("Kanata log: a redirect flushes only instructions younger than its source", "[konata]") {
   using namespace konata_test;
   TraceSample c1 = at(kF0, 1);
   c1.stage[kF1] = {true, 0};
-  c1.redirect = true;
-  c1.redirect_stage = kF1;  // I1 in F0 is flushed, I0 in F1 stays
-  const Run r = run({at(kF0, 0), c1, at(kF2, 0)});
+  TraceSample c2 = at(kF2, 0);
+  c2.redirect = true;
+  c2.redirect_id = 0;  // I0 redirects: I1 is flushed, I0 stays
+  const Run r = run({at(kF0, 0), c1, c2, at(kD, 0)});
   CHECK(r.violations == 0);
   REQUIRE(r.log.insns.size() == 2);
   CHECK(r.log.insns.at(1).retire_type == 1);
-  CHECK(r.log.insns.at(1).retire_cycle == 2);
-  CHECK(r.log.insns.at(0).stages.back().first == "F2");
+  CHECK(r.log.insns.at(1).retire_cycle == 3);
+  CHECK(r.log.insns.at(0).stages.back().first == "D");
+}
+
+TEST_CASE("Kanata log: a redirect flushes a younger instruction entering a later stage", "[konata]") {
+  // the branch I0 moves on to M while I1 enters X in the same cycle; stage-based flushing could not
+  // tell them apart, ID-based flushing can
+  using namespace konata_test;
+  std::vector<TraceSample> v;
+  for (int c = 0; c < 5; ++c) {  // I0 and I1 walk F0 .. D one cycle apart
+    TraceSample s;
+    if (c <= kD) s.stage[c] = {true, 0};
+    if (c >= 1 && c - 1 <= kD) s.stage[c - 1] = {true, 1};
+    s.f0_pc = 0x80000000 + 4 * c;
+    v.push_back(s);
+  }
+  TraceSample s;
+  s.stage[kX] = {true, 0};
+  s.stage[kD] = {true, 1};
+  v.push_back(s);
+  TraceSample r;
+  r.stage[kM] = {true, 0};
+  r.stage[kX] = {true, 1};
+  r.redirect = true;
+  r.redirect_id = 0;
+  v.push_back(r);
+  const Run res = run(v);
+  CHECK(res.violations == 0);
+  REQUIRE(res.log.insns.size() == 2);
+  CHECK(res.log.insns.at(1).retire_type == 1);  // I1 flushed although it was in X
+  CHECK(res.log.insns.at(1).retire_cycle == 7);
 }
 
 TEST_CASE("Kanata writer writes the log while running", "[konata]") {
@@ -129,12 +159,14 @@ TEST_CASE("Kanata writer writes the log while running", "[konata]") {
 
 TEST_CASE("Kanata writer reports IDs reported after a flush", "[konata]") {
   using namespace konata_test;
-  TraceSample c0 = at(kF0, 0);
-  c0.redirect = true;
-  c0.redirect_stage = kF1;  // flushes I0
-  const Run r = run({c0, at(kF1, 0)});
+  TraceSample c1 = at(kF0, 1);
+  c1.stage[kF1] = {true, 0};
+  TraceSample c2 = at(kF2, 0);
+  c2.redirect = true;
+  c2.redirect_id = 0;  // flushes I1
+  const Run r = run({at(kF0, 0), c1, c2, at(kF1, 1)});
   CHECK(r.violations == 1);
-  CHECK(r.log.insns.size() == 1);
+  CHECK(r.log.insns.size() == 2);
 }
 
 TEST_CASE("Kanata writer reports instructions reported after retiring", "[konata]") {
@@ -215,4 +247,35 @@ TEST_CASE("Kanata writer still reports moving back in a later cycle", "[konata]"
   TraceSample c1 = at(kD, 0);
   const Run r = run({at(kF0, 0), c1, at(kFB, 0)});
   CHECK(r.violations == 1);
+}
+
+TEST_CASE("Kanata log: a redirect keeps the new-path instruction reported in the same cycle", "[konata]") {
+  // F0 reported as "enters at the end of this cycle": the jump target appears in F0 in the cycle
+  // of the redirect
+  using namespace konata_test;
+  TraceSample c1 = at(kF0, 1, 0x80000004);  // wrong path, in F0 since cycle 1
+  c1.stage[kF1] = {true, 0};
+  TraceSample c2 = at(kF0, 2, 0x80000050);  // the target, first reported now
+  c2.stage[kF2] = {true, 0};
+  c2.redirect = true;
+  c2.redirect_id = 0;
+  const Run r = run({at(kF0, 0), c1, c2, at(kF1, 2)});
+  CHECK(r.violations == 0);
+  REQUIRE(r.log.insns.size() == 3);
+  CHECK(r.log.insns.at(1).retire_type == 1);  // I1 flushed
+  CHECK(r.log.insns.at(2).retire_type == 1);  // I2 only flushed at the end of the log
+  CHECK(r.log.insns.at(2).retire_cycle == 4);
+  CHECK(r.log.insns.at(2).stages.back().first == "F1");
+}
+
+TEST_CASE("Kanata log: a new instruction may reach a later stage in its first cycle", "[konata]") {
+  // F0 reported as occupancy and F1 as a handshake in the same cycle
+  using namespace konata_test;
+  TraceSample c0 = at(kF0, 0);
+  c0.stage[kF1] = {true, 0};
+  const Run r = run({c0, at(kF2, 0)});
+  CHECK(r.violations == 0);
+  REQUIRE(r.log.insns.size() == 1);
+  CHECK(r.log.insns.at(0).stages == Stages{{"F1", 0}, {"F2", 1}});
+  CHECK(r.log.insns.at(0).label.rfind("80000000: ", 0) == 0);
 }

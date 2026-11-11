@@ -47,10 +47,10 @@ void overisc_konata_front(long long f0_pc, int f2_inst) {
   s.f2_inst = static_cast<uint32_t>(f2_inst);
 }
 
-void overisc_konata_redirect(unsigned char valid, int stage) {
+void overisc_konata_redirect(unsigned char valid, int id) {
   TraceSample& s = state()->sample;
   s.redirect = valid != 0;
-  s.redirect_stage = stage;
+  s.redirect_id = static_cast<uint32_t>(id);
 }
 
 void overisc_konata_retire(unsigned char valid, int id) {

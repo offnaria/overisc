@@ -20,9 +20,12 @@
 //
 // Leaving the pipeline is explicit:
 //   - retire: the instruction retires at the end of this cycle
-//   - redirect: every instruction in a stage before redirect_stage is flushed at the end of
-//     this cycle; the one in redirect_stage itself stays. This is the redirect bus (oldest
-//     source wins).
+//   - redirect: every instruction younger than redirect_id (a larger ID) is flushed at the end of
+//     this cycle; redirect_id itself stays. The redirect bus provides it (oldest source wins).
+//     An instruction first reported in the redirect cycle enters F0 at its end, after the
+//     redirect, so it is on the new path and stays.
+//     Naming the instruction rather than a stage keeps the flush exact whichever cycle the stages
+//     are reported in.
 package overisc_trace_pkg;
 
   import overisc_cfg_pkg::*;
@@ -54,9 +57,9 @@ package overisc_trace_pkg;
     logic [XLEN-1:0] f0_pc;  // PC of the instruction reported in F0
     logic [ILEN-1:0] f2_inst;  // bits of the instruction reported in F2
     trace_slot_t [NRET-1:0] retire;  // instructions that retire at the end of this cycle
-    // flush of everything before redirect_stage at the end of this cycle
+    // flush of every instruction younger than redirect_id at the end of this cycle
     logic redirect;
-    logic [2:0] redirect_stage;  // trace_stage_e
+    trace_id_t redirect_id;
   } trace_t;
 
 endpackage

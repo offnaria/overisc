@@ -11,7 +11,8 @@
 //
 // Input that breaks the rules (an ID reported after it left, an instruction first reported
 // after F0, moving back to an earlier stage, overtaking an older one) is reported on `warn`
-// and ignored, so it cannot produce misleading entries.
+// and ignored, so it cannot produce misleading entries. The overtaking check assumes an in-order
+// pipeline; an out-of-order back end would have to drop it for its execution stages.
 #pragma once
 
 #include <cstdint>
@@ -34,7 +35,7 @@ struct TraceSample {
   uint32_t f2_inst = 0;
   std::vector<TraceSlot> retire;
   bool redirect = false;
-  int redirect_stage = 0;  // overisc_trace_pkg::trace_stage_e
+  uint32_t redirect_id = 0;  // instructions younger than this one are flushed
 };
 
 class KonataTracer {
@@ -68,6 +69,7 @@ class KonataTracer {
   struct Insn {
     uint64_t kid;  // ID in the log file
     Stage stage;
+    uint64_t created;      // cycle of the first report
     uint64_t stage_cycle;  // cycle `stage` started
     bool has_inst;         // disassembly added to the label
   };

@@ -40,17 +40,22 @@ void KonataTracer::report(uint64_t c, uint32_t id, Stage st, const TraceSample& 
       violation(c, where + ": the instruction already left the pipeline");
       return;
     }
-    if (st != kF0) {
+    // the first report must include F0 (it may also reach a later stage in the same cycle)
+    if (st != kF0 && !(s.stage[kF0].valid && s.stage[kF0].id == id)) {
       violation(c, where + ": first report must be in F0");
       return;
     }
     last_id_ = id;
     const uint64_t kid = next_kid_++;
     const std::string k = std::to_string(kid);
-    it = insns_.emplace(id, Insn{kid, kF0, c, false}).first;
+    it = insns_.emplace(id, Insn{kid, st, c, c, false}).first;
     emit(c, "I\t" + k + "\t" + std::to_string(id) + "\t0");
     emit(c, "L\t" + k + "\t0\t" + hex(s.f0_pc) + ": ");
-    emit(c, "S\t" + k + "\t0\t" + kStageName[kF0]);
+    emit(c, "S\t" + k + "\t0\t" + kStageName[st]);
+    if (st >= kF2) {  // reached F2 in its first cycle
+      it->second.has_inst = true;
+      emit(c, "L\t" + k + "\t0\t" + disasm_(s.f2_inst));
+    }
     return;
   }
   Insn& i = it->second;
@@ -103,16 +108,17 @@ void KonataTracer::sample(uint64_t c, const TraceSample& s) {
     insns_.erase(it);
   }
 
-  // redirect: flush everything before redirect_stage at the end of this cycle
+  // redirect: flush every instruction younger than redirect_id at the end of this cycle. One that
+  // is first reported in this cycle enters F0 at its end, after the redirect: it is on the new
+  // path and stays.
   if (s.redirect) {
-    const Stage src = static_cast<Stage>(std::clamp(s.redirect_stage, 0, 7));
-    for (auto it = insns_.begin(); it != insns_.end();) {
-      if (it->second.stage < src) {
-        emit(c + 1, "R\t" + std::to_string(it->second.kid) + "\t0\t1");
-        it = insns_.erase(it);
-      } else {
+    for (auto it = insns_.upper_bound(s.redirect_id); it != insns_.end();) {
+      if (it->second.created == c) {
         ++it;
+        continue;
       }
+      emit(c + 1, "R\t" + std::to_string(it->second.kid) + "\t0\t1");
+      it = insns_.erase(it);
     }
   }
 

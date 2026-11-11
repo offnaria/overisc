@@ -15,7 +15,7 @@
 //    4    I4  I3  I2      I1  I0
 //    5    I5  I4  I3  I2      I1  I0
 //    6    I6  I5  I4  I3  I2  I1      I0  I0
-//    7        I6  I5  I4  I3  I2  I1      redirect from X
+//    7        I6  I5  I4  I3  I2  I1      redirect by I2
 //    8    I7                      I2  I1  I1
 //    9        I7                      I2  I2
 //   10            I7
@@ -69,7 +69,7 @@ inline std::vector<TraceSample> scenario() {
   at(6, kW, 0), retire(6, 0);
   at(7, kF1, 6), at(7, kF2, 5), at(7, kFB, 4), at(7, kD, 3), at(7, kX, 2), at(7, kM, 1);
   v[7].redirect = true;
-  v[7].redirect_stage = kX;
+  v[7].redirect_id = 2;  // I2, the jump
   at(8, kF0, 7), at(8, kM, 2), at(8, kW, 1), retire(8, 1);
   at(9, kF1, 7), at(9, kW, 2), retire(9, 2);
   at(10, kF2, 7);
