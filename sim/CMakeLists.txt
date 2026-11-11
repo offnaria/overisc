@@ -112,17 +112,23 @@ verilate(test_konata_glue
     ${TRACE_PKG} ${CMAKE_CURRENT_SOURCE_DIR}/trace/overisc_sim_konata.sv)
 catch_discover_tests(test_konata_glue PROPERTIES LABELS "verilator")
 
-# Pipeline buffers in rtl/common (overisc_reg_slice, overisc_skid_buffer).
+# Pipeline buffers: overisc_reg_slice, overisc_skid_buffer (rtl/common), overisc_fetch_buffer
+# (rtl/core; two depths).
 set(PIPE_IF ${OVERISC_ROOT}/rtl/core/overisc_pipe_if.sv)
+set(PIPE_BUF_SRCS
+  ${OVERISC_ROOT}/rtl/core/overisc_cfg_pkg.sv ${OVERISC_ROOT}/rtl/core/overisc_commit_pkg.sv
+  ${OVERISC_ROOT}/rtl/core/overisc_trace_pkg.sv ${OVERISC_ROOT}/rtl/core/overisc_pipe_pkg.sv
+  ${PIPE_IF} -F ${COMMON_F} ${OVERISC_ROOT}/rtl/core/overisc_fetch_buffer.sv)
 add_executable(test_pipe_buf tests/pipe/test_pipe_buf.cc)
 target_link_libraries(test_pipe_buf PRIVATE overisc_sim Catch2::Catch2WithMain)
-foreach(kind_name IN ITEMS "0;reg_slice" "1;skid_buffer")
-  list(GET kind_name 0 kind)
-  list(GET kind_name 1 name)
+foreach(variant IN ITEMS "reg_slice;0;2" "skid_buffer;1;2" "fetch_buffer;2;2" "fetch_buffer16;2;4")
+  list(GET variant 0 name)
+  list(GET variant 1 kind)
+  list(GET variant 2 depth_w)
   verilate(test_pipe_buf
     PREFIX Vtb_${name} TOP_MODULE tb_pipe_buf
     SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tests/pipe/tb_pipe_buf.sv
-    VERILATOR_ARGS ${VERILATOR_WARN} ${PIPE_IF} -F ${COMMON_F} -GKIND=${kind})
+    VERILATOR_ARGS ${VERILATOR_WARN} ${PIPE_BUF_SRCS} -GKIND=${kind} -GDEPTH_W=${depth_w})
 endforeach()
 catch_discover_tests(test_pipe_buf PROPERTIES LABELS "verilator")
 
