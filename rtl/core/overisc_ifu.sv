@@ -14,7 +14,9 @@ module overisc_ifu
     input  axi_resp_t ibus_resp,
 
     overisc_pipe_if.sink   ifu_sink,
-    overisc_pipe_if.source ifu_source
+    overisc_pipe_if.source ifu_source,
+
+    input kill
 );
 
   typedef enum logic [1:0] {
@@ -23,6 +25,7 @@ module overisc_ifu
   } state_e;
 
   state_e state, state_w;
+  logic killed, killed_w;
 
   // ibus
   logic ibus_arvalid, ibus_arvalid_w;
@@ -40,6 +43,7 @@ module overisc_ifu
   always_comb begin
     // setup
     state_w = state;
+    killed_w = killed;
     ibus_arvalid_w = ibus_arvalid;
     ibus_araddr_w = ibus_araddr;
     ibus_rready_w = ibus_rready;
@@ -48,6 +52,9 @@ module overisc_ifu
     sink_data_w = sink_data;
 
     // logic
+    if (kill) begin
+      killed_w = 1'b1;
+    end
     source_valid = '0;
     // TODO: Add cache interface.
     // TODO: Add address translation logic.
@@ -55,7 +62,7 @@ module overisc_ifu
       IDLE: begin
         sink_data_w   = pcgen_source_t'(ifu_sink.data);
         ibus_araddr_w = axi_addr_t'(sink_data_w.pc);
-        if (sink_ready && ifu_sink.valid) begin
+        if (sink_ready && ifu_sink.valid && !kill) begin
           ibus_arvalid_w = 1'b1;
           ibus_rready_w = 1'b1;
           state_w = FETCH;
@@ -70,9 +77,13 @@ module overisc_ifu
           ibus_rdata_w  = ibus_resp.r.data;
         end
         if (!ibus_rready_w) begin
-          source_valid = 1'b1;
-          if (ifu_source.ready) begin
+          if (killed_w) begin
             state_w = IDLE;
+          end else begin
+            source_valid = 1'b1;
+            if (ifu_source.ready) begin
+              state_w = IDLE;
+            end
           end
         end
       end
@@ -85,6 +96,10 @@ module overisc_ifu
         id: sink_data.id
     };
     sink_ready_w = (state_w == IDLE);
+
+    if (state_w == IDLE) begin
+      killed_w = '0;
+    end
 
     // output
     ifu_sink.ready = sink_ready;
@@ -105,6 +120,7 @@ module overisc_ifu
 
   always_ff @(posedge clk) begin
     state <= state_w;
+    killed <= killed_w;
     ibus_arvalid <= ibus_arvalid_w;
     ibus_araddr <= ibus_araddr_w;
     ibus_rready <= ibus_rready_w;
@@ -114,6 +130,7 @@ module overisc_ifu
 
     if (rst) begin
       state <= IDLE;
+      killed <= '0;
       ibus_arvalid <= '0;
       ibus_rready <= '0;
       sink_ready <= '0;
