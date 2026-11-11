@@ -8,7 +8,9 @@ module overisc_reg_slice #(
     input rst,
 
     overisc_pipe_if.sink   sink,
-    overisc_pipe_if.source source
+    overisc_pipe_if.source source,
+
+    input kill  // Invalidate internal data.
 );
 
   logic [DATA_W-1:0] source_data, source_data_w;
@@ -27,6 +29,10 @@ module overisc_reg_slice #(
     if (sink_ready) begin
       source_data_w  = sink.data;  // No need to check sink.valid here.
       source_valid_w = sink.valid;
+    end
+
+    if (kill) begin
+      source_valid_w = '0;
     end
 
     // output

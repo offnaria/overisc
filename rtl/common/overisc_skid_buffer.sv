@@ -8,7 +8,9 @@ module overisc_skid_buffer #(
     input rst,
 
     overisc_pipe_if.sink   sink,
-    overisc_pipe_if.source source
+    overisc_pipe_if.source source,
+
+    input kill  // Invalidate internal data.
 );
 
   logic [DATA_W-1:0] source_data, source_data_w;
@@ -45,6 +47,11 @@ module overisc_skid_buffer #(
     end else begin
       // sink_ready==0
       skid_valid_w = !source.ready;
+    end
+
+    if (kill) begin
+      source_valid_w = '0;
+      skid_valid_w   = '0;
     end
 
     sink_ready_w = !skid_valid_w;

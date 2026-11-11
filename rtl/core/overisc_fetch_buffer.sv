@@ -19,7 +19,9 @@ module overisc_fetch_buffer
     overisc_pipe_if.source source,
 
     output trace_id_t fb_trace_id,
-    output logic fb_trace_valid
+    output logic fb_trace_valid,
+
+    input kill  // Invalidate internal data.
 );
 
   DATA_T source_data, source_data_w;
@@ -66,6 +68,12 @@ module overisc_fetch_buffer
     if (sink_hs && ((source_valid && !source.ready) || fifo_used)) begin  // Memory write.
       fifo_wptr_w = fifo_wptr + 'd1;
       mem_write   = 1'b1;
+    end
+
+    if (kill) begin
+      source_valid_W = '0;
+      fifo_wptr_w = '0;
+      fifo_rptr_w = '0;
     end
 
     fifo_used_w = fifo_wptr_w != fifo_rptr_w;
