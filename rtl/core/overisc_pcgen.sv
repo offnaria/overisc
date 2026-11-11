@@ -12,9 +12,11 @@ module overisc_pcgen
 
     // debug
     output logic [XLEN-1:0] pcgen_npc,  // next pc
-    output trace_id_t pcgen_nid  // next id
+    output trace_id_t pcgen_nid,  // next id
 
-    // TODO: Add sink interface to accept jumps
+    // jumps
+    input bru_valid,
+    input [XLEN-1:0] bru_tpc
 );
 
   logic [XLEN-1:0] pc, pc_w;
@@ -28,7 +30,10 @@ module overisc_pcgen
     id_w = id;
 
     // logic
-    if (pcgen_source.ready) begin
+    if (bru_valid) begin
+      pc_w = bru_tpc;
+      id_w = id + 'd1;
+    end else if (pcgen_source.ready) begin
       pc_w = pc + 'd4;
       id_w = id + 'd1;
     end
