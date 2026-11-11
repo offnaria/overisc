@@ -87,19 +87,25 @@ test: sim
 
 # ---- 1 本だけ実行 ----
 # make run ELF=<path> [SEED=1] [PROFILE=fast] [MAX_CYCLES=1000000] [KONATA=1] [FST=<file>]
+#          [TRACE_STRUCTS=1]
 #   KONATA=1 で build/sim/konata/<名前>_<プロファイル>_s<シード>.log に Konata 用ログを出す。
-#   Linux のような長いプログラムでは KONATA=0 にする。
-SEED       ?= 1
-PROFILE    ?= fast
-MAX_CYCLES ?= 1000000
-KONATA     ?= 1
-FST        ?=
-RUN_KONATA  = $(SIM_BUILD)/konata/$(notdir $(ELF))_$(PROFILE)_s$(SEED).log
+#   TRACE_STRUCTS=1 では FST の波形で構造体をメンバーごとに見られる版（test_core）を使う。
+#   Linux のような長いプログラムでは KONATA=0 TRACE_STRUCTS=0 にする（TRACE_STRUCTS=0 の版
+#   test_core_flat は必要になったときにビルドする）。
+SEED          ?= 1
+PROFILE       ?= fast
+MAX_CYCLES    ?= 1000000
+KONATA        ?= 1
+TRACE_STRUCTS ?= 1
+FST           ?=
+RUN_KONATA     = $(SIM_BUILD)/konata/$(notdir $(ELF))_$(PROFILE)_s$(SEED).log
+RUN_SIM        = $(if $(filter 1,$(TRACE_STRUCTS)),test_core,test_core_flat)
 
 .PHONY: run
 run: sim
-	@test -n "$(ELF)" || { echo "usage: make run ELF=<path> [SEED=] [PROFILE=] [KONATA=0|1] [FST=]"; exit 2; }
-	$(SIM_BUILD)/test_core --elf $(ELF) --seed $(SEED) --profile $(PROFILE) \
+	@test -n "$(ELF)" || { echo "usage: make run ELF=<path> [SEED=] [PROFILE=] [KONATA=0|1] [TRACE_STRUCTS=0|1] [FST=]"; exit 2; }
+	$(if $(filter 1,$(TRACE_STRUCTS)),,cmake --build $(SIM_BUILD) --target test_core_flat -j || cmake --build $(SIM_BUILD) --target test_core_flat -j)
+	$(SIM_BUILD)/$(RUN_SIM) --elf $(ELF) --seed $(SEED) --profile $(PROFILE) \
 	    --max-cycles $(MAX_CYCLES) $(if $(filter 1,$(KONATA)),--konata $(RUN_KONATA)) \
 	    $(if $(FST),--fst $(FST))
 

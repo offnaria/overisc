@@ -71,8 +71,14 @@ Rebuild after changing RTL with `make sim` (or `cmake --build build/sim -j`).
 ```sh
 make run ELF=build/riscv-tests/rv64ui-p-add                      # Konata log on
 make run ELF=build/riscv-tests/rv64ui-p-add SEED=3 PROFILE=large FST=add.fst
-make run ELF=<long program> KONATA=0 MAX_CYCLES=100000000        # e.g. Linux: no Konata log
+make run ELF=<long program> KONATA=0 TRACE_STRUCTS=0 MAX_CYCLES=100000000   # e.g. Linux
 ```
+
+The simulator comes in two builds that differ only in the FST waveform: `test_core` shows each
+struct member as its own signal (Verilator `--trace-structs`) and is the default for `make run`
+and the regression; `test_core_flat` shows structs as one bit vector and is built only when
+`make run TRACE_STRUCTS=0` asks for it, for long runs. Nothing is traced unless an FST file is
+requested.
 
 Or call the simulator directly (nothing is written unless asked):
 

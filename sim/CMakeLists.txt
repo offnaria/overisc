@@ -138,15 +138,37 @@ else()
   set(KONATA_ARGS)
 endif()
 
-add_executable(test_core tests/core/test_core.cc)
-target_link_libraries(test_core PRIVATE overisc_sim Catch2::Catch2)
-verilate(test_core
-  PREFIX Vtb_core TOP_MODULE tb_core TRACE_FST
-  SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tb/tb_core.sv
-  VERILATOR_ARGS ${VERILATOR_WARN} -F ${CMAKE_CURRENT_SOURCE_DIR}/sim.f
-    -GRESET_VECTOR=${CORE_RESET_VECTOR}
-    --x-assign unique --x-initial unique
-    ${KONATA_ARGS})
+# The core simulator in two builds that differ only in the FST waveform:
+#   test_core       structs traced member by member (--trace-structs); the regression and
+#                   `make run` use it, for riscv-tests and short instruction sequences
+#   test_core_flat  structs traced as one bit vector; not built by default, for long runs
+#                   (`make run TRACE_STRUCTS=0`, or cmake --build ... --target test_core_flat)
+# Nothing is traced unless a run asks for an FST file, so the struct tracing costs nothing
+# otherwise.
+function(add_core_sim target)
+  cmake_parse_arguments(ARG "TRACE_STRUCTS;EXCLUDE_FROM_ALL" "" "" ${ARGN})
+  if(ARG_EXCLUDE_FROM_ALL)
+    add_executable(${target} EXCLUDE_FROM_ALL tests/core/test_core.cc)
+  else()
+    add_executable(${target} tests/core/test_core.cc)
+  endif()
+  target_link_libraries(${target} PRIVATE overisc_sim Catch2::Catch2)
+  if(ARG_TRACE_STRUCTS)
+    set(structs TRACE_STRUCTS)
+  else()
+    set(structs)
+  endif()
+  verilate(${target}
+    PREFIX Vtb_core TOP_MODULE tb_core TRACE_FST ${structs}
+    SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tb/tb_core.sv
+    VERILATOR_ARGS ${VERILATOR_WARN} -F ${CMAKE_CURRENT_SOURCE_DIR}/sim.f
+      -GRESET_VECTOR=${CORE_RESET_VECTOR}
+      --x-assign unique --x-initial unique
+      ${KONATA_ARGS})
+endfunction()
+
+add_core_sim(test_core TRACE_STRUCTS)
+add_core_sim(test_core_flat EXCLUDE_FROM_ALL)
 
 set(M0_LIST ${RVTESTS_DIR}/m0.list)
 if(EXISTS ${M0_LIST})
